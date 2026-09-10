@@ -66,13 +66,21 @@ export function useMapInteractions(
 
     if (drawType === null) {
       const modify = new Modify({ source });
+      modify.on("modifystart", () => {
+        geoStore.beginGesture();
+      });
       modify.on("modifyend", (event) => {
+        geoStore.endGesture();
         commitFeatures(event.features.getArray());
       });
       register(modify);
 
       const translate = new Translate({ features: selected });
+      translate.on("translatestart", () => {
+        geoStore.beginGesture();
+      });
       translate.on("translateend", (event) => {
+        geoStore.endGesture();
         commitFeatures(event.features.getArray());
       });
       register(translate);
@@ -81,7 +89,14 @@ export function useMapInteractions(
       // id-less feature on the map that the store knows nothing about. The store
       // adds it instead, and it arrives back through useMapSync with a real id.
       const draw = new Draw({ type: drawType });
+      draw.on("drawstart", () => {
+        geoStore.beginGesture();
+      });
+      draw.on("drawabort", () => {
+        geoStore.endGesture();
+      });
       draw.on("drawend", (event) => {
+        geoStore.endGesture();
         const geometry: Geometry | undefined = event.feature.getGeometry();
         if (!geometry) return;
         geoStore.addFeature(toGeoJson(geometry), EditOrigin.MAP);
@@ -96,6 +111,8 @@ export function useMapInteractions(
 
     return () => {
       for (const interaction of added) map.removeInteraction(interaction);
+      // Switching tools mid-gesture would otherwise leave undo wedged off.
+      geoStore.endGesture();
     };
   }, [targets, tool, onDrawEnd]);
 

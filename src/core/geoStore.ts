@@ -1,6 +1,6 @@
 import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
 import { GeoUtils } from "./GeoUtils";
-import { EditOrigin, GeometryKind, type GeoSnapshot } from "./types";
+import { EditOrigin, GeometryKind, type GeoSnapshot, type HistoryEntry } from "./types";
 
 /** Seeded so the PoC opens with an existing point already loaded on the map. */
 export const INITIAL_COLLECTION: FeatureCollection = {
@@ -14,6 +14,20 @@ export const INITIAL_COLLECTION: FeatureCollection = {
     },
   ],
 };
+
+/** Each entry holds a whole collection, so the stack is bounded rather than unbounded. */
+const HISTORY_LIMIT = 100;
+
+/**
+ * Edits that arrive in bursts while the user works through one intent get folded into
+ * a single entry, so undo steps back over a typed word rather than a debounce tick.
+ */
+const COALESCE_WINDOW_MS = 600;
+
+const COALESCING_ORIGINS: ReadonlySet<EditOrigin> = new Set<EditOrigin>([
+  EditOrigin.TEXT,
+  EditOrigin.NUMERIC,
+]);
 
 export interface GeometryUpdate {
   readonly featureId: string;
@@ -32,6 +46,14 @@ export interface GeoStore {
   select(featureId: string | null): void;
   /** Ask the map to recentre — view state, so it does not touch `revision`. */
   focus(position: Position): void;
+  undo(): void;
+  redo(): void;
+  /**
+   * Map gestures mutate ol geometries in place and only commit when they end, so a
+   * history jump mid-drag would be overwritten by the gesture's own end event.
+   */
+  beginGesture(): void;
+  endGesture(): void;
 }
 
 export function createGeoStore(initial: FeatureCollection): GeoStore {
@@ -43,10 +65,63 @@ export function createGeoStore(initial: FeatureCollection): GeoStore {
     origin: EditOrigin.INITIAL,
     selectedId: null,
     focus: null,
+    undoDepth: 0,
+    redoDepth: 0,
   };
+
+  const past: HistoryEntry[] = [];
+  let future: HistoryEntry[] = [];
+  let lastEntryOrigin: EditOrigin | null = null;
+  let lastEntryAt = 0;
+  let gesturing = false;
 
   const emit = (): void => {
     for (const listener of listeners) listener();
+  };
+
+  const currentEntry = (): HistoryEntry => ({
+    collection: snapshot.collection,
+    selectedId: snapshot.selectedId,
+  });
+
+  /**
+   * Records the state we are about to leave. A coalescing burst deliberately does not
+   * push: whatever is already on top of `past` is the state from before the burst
+   * started, which is exactly where undo should land.
+   */
+  const pushHistory = (origin: EditOrigin): void => {
+    const now: number = Date.now();
+    const coalesces: boolean =
+      past.length > 0 &&
+      origin === lastEntryOrigin &&
+      COALESCING_ORIGINS.has(origin) &&
+      now - lastEntryAt < COALESCE_WINDOW_MS;
+
+    if (!coalesces) {
+      past.push(currentEntry());
+      if (past.length > HISTORY_LIMIT) past.shift();
+    }
+    lastEntryOrigin = origin;
+    lastEntryAt = now;
+    future = [];
+  };
+
+  /** Expects an already-normalized collection that genuinely differs from the current one. */
+  const commitState = (
+    normalized: FeatureCollection,
+    origin: EditOrigin,
+    selectedId: string | null,
+  ): void => {
+    snapshot = {
+      ...snapshot,
+      collection: normalized,
+      revision: snapshot.revision + 1,
+      origin,
+      selectedId: GeoUtils.findFeature(normalized, selectedId) !== null ? selectedId : null,
+      undoDepth: past.length,
+      redoDepth: future.length,
+    };
+    emit();
   };
 
   const publish = (collection: FeatureCollection, origin: EditOrigin): void => {
@@ -55,15 +130,9 @@ export function createGeoStore(initial: FeatureCollection): GeoStore {
     // here instead of bouncing between the panes.
     if (GeoUtils.isEqual(normalized, snapshot.collection)) return;
 
-    const selectionSurvives: boolean = GeoUtils.findFeature(normalized, snapshot.selectedId) !== null;
-    snapshot = {
-      collection: normalized,
-      revision: snapshot.revision + 1,
-      origin,
-      selectedId: selectionSurvives ? snapshot.selectedId : null,
-      focus: snapshot.focus,
-    };
-    emit();
+    // Before commitState, so the snapshot it emits carries the new depths.
+    pushHistory(origin);
+    commitState(normalized, origin, snapshot.selectedId);
   };
 
   const setGeometries = (updates: readonly GeometryUpdate[], origin: EditOrigin): void => {
@@ -76,6 +145,16 @@ export function createGeoStore(initial: FeatureCollection): GeoStore {
       return geometry ? { ...feature, geometry } : feature;
     });
     publish({ type: "FeatureCollection", features }, origin);
+  };
+
+  const travel = (from: HistoryEntry[], to: HistoryEntry[]): void => {
+    if (gesturing) return;
+    const entry: HistoryEntry | undefined = from.pop();
+    if (!entry) return;
+    to.push(currentEntry());
+    // A burst must never coalesce across a history jump.
+    lastEntryOrigin = null;
+    commitState(entry.collection, EditOrigin.HISTORY, entry.selectedId);
   };
 
   return {
@@ -124,6 +203,22 @@ export function createGeoStore(initial: FeatureCollection): GeoStore {
       const nonce: number = (snapshot.focus?.nonce ?? 0) + 1;
       snapshot = { ...snapshot, focus: { position, nonce } };
       emit();
+    },
+
+    undo: (): void => {
+      travel(past, future);
+    },
+
+    redo: (): void => {
+      travel(future, past);
+    },
+
+    beginGesture: (): void => {
+      gesturing = true;
+    },
+
+    endGesture: (): void => {
+      gesturing = false;
     },
   };
 }

@@ -10,6 +10,8 @@ export enum EditOrigin {
   MAP = "MAP",
   NUMERIC = "NUMERIC",
   SEARCH = "SEARCH",
+  /** A jump through the undo/redo stack rather than a fresh edit. */
+  HISTORY = "HISTORY",
 }
 
 /** Values match the GeoJSON `geometry.type` strings so they compare directly. */
@@ -36,6 +38,12 @@ export interface FocusRequest {
   readonly nonce: number;
 }
 
+/** One restorable point in the document's history. */
+export interface HistoryEntry {
+  readonly collection: FeatureCollection;
+  readonly selectedId: string | null;
+}
+
 export interface GeoSnapshot {
   readonly collection: FeatureCollection;
   /** Bumped only when `collection` actually changes; selection changes do not bump it. */
@@ -43,6 +51,8 @@ export interface GeoSnapshot {
   readonly origin: EditOrigin;
   readonly selectedId: string | null;
   readonly focus: FocusRequest | null;
+  readonly undoDepth: number;
+  readonly redoDepth: number;
 }
 
 /** One numerically editable position within a geometry, addressed by flat index. */

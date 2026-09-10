@@ -4,6 +4,7 @@ import type { editor } from "monaco-editor";
 import { GeoUtils } from "../core/GeoUtils";
 import { geoStore } from "../core/geoStore";
 import { EditOrigin, type GeoSnapshot } from "../core/types";
+import { monaco } from "./monacoRuntime";
 import { EDITOR_OPTIONS } from "./monacoSetup";
 
 const COMMIT_DEBOUNCE_MS = 300;
@@ -25,6 +26,12 @@ function JsonEditor({ snapshot }: JsonEditorProps) {
   const dirtyRef = useRef<boolean>(false);
 
   const applyFromStore = useCallback((next: GeoSnapshot): void => {
+    // A commit still in flight would land after this and silently reinstate the
+    // text we are about to replace.
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
     setText(GeoUtils.stringify(next.collection));
     appliedRevisionRef.current = next.revision;
     dirtyRef.current = false;
@@ -37,7 +44,12 @@ function JsonEditor({ snapshot }: JsonEditorProps) {
 
     // Someone else changed the data while the user is part-way through typing.
     // Overwriting would destroy their in-progress edit, so hand them the choice.
-    if (dirtyRef.current && (editorRef.current?.hasTextFocus() ?? false)) {
+    // An undo/redo is the user's own deliberate act, so it skips the prompt.
+    if (
+      snapshot.origin !== EditOrigin.HISTORY &&
+      dirtyRef.current &&
+      (editorRef.current?.hasTextFocus() ?? false)
+    ) {
       setConflict(true);
       return;
     }
@@ -74,6 +86,30 @@ function JsonEditor({ snapshot }: JsonEditorProps) {
 
   const handleMount: OnMount = (instance) => {
     editorRef.current = instance;
+
+    // These beat Monaco's built-in undo because the keybinding resolver scans
+    // dynamic registrations after the defaults and takes the last match; addAction
+    // also scopes them to this editor. Text-buffer undo would desync this pane from
+    // the store, and the debounce would then commit the stale text straight back.
+    instance.addAction({
+      id: "geo.history.undo",
+      label: "Undo (document)",
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyZ],
+      run: () => {
+        geoStore.undo();
+      },
+    });
+    instance.addAction({
+      id: "geo.history.redo",
+      label: "Redo (document)",
+      keybindings: [
+        monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyZ,
+        monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyY,
+      ],
+      run: () => {
+        geoStore.redo();
+      },
+    });
   };
 
   return (
