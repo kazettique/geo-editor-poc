@@ -1,75 +1,48 @@
-# React + TypeScript + Vite
+# Geo Editor PoC
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A non-production proof of concept for a Geometry field that keeps a **GeoJSON text
+editor**, an **interactive map** and a **location search** bi-directionally in sync.
 
-Currently, two official plugins are available:
+Built against [`poc-requirement.md`](./poc-requirement.md).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```bash
+bun install
+bun dev          # http://localhost:5173
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Deliverables
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+| Document                                     | Contents                                                                                                                            |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| [`docs/report.md`](./docs/report.md)         | Why the editing methods are separated, blockers and limitations, recommendation, follow-up breakdown, manual verification checklist |
+| [`docs/comparison.md`](./docs/comparison.md) | Location-search and map-stack option tables, with measured results                                                                  |
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+**Headline finding:** neither free geocoder gives usable Japanese place-name search — GSI
+is address-only, and Nominatim ranks footpaths above Tokyo Station. Google has the data
+but its licence forbids pairing it with a non-Google map. See the report.
+
+## Architecture
+
+One canonical `FeatureCollection` in WGS84 lives outside React
+(`src/core/geoStore.ts`). Every commit carries an `EditOrigin` and bumps a monotonic
+`revision`; each pane records the last revision it applied and ignores its own echo.
+Coordinates are rounded to 7 decimals on entry, and commits that are deep-equal to
+current state are dropped — together these stop the panes rewriting each other.
 
 ```
+src/
+  core/       store, GeoJSON validation (zod), geometry helpers
+  editor/     Monaco pane — JSON-only build, schema-driven autocomplete
+  map/        OpenLayers — rendering, diffed sync, Draw/Modify/Translate/Snap
+  inspector/  numeric lat/lng editing, vertex addressing
+  search/     GeocodeProvider abstraction + Nominatim and GSI implementations
+```
+
+## Stack
+
+React 19 · TypeScript · Vite · Tailwind 4 · OpenLayers 10 · Monaco 0.56 · zod 4
+
+## Status
+
+Feature-complete against the requirement's five validation checkboxes, and verified by
+71 automated checks. **Not yet verified in a browser** — see §2 and §6 of the report.
