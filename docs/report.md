@@ -3,16 +3,35 @@
 Covers the Expected Output of [`poc-requirement.md`](../poc-requirement.md).
 Option tables live in [comparison.md](./comparison.md).
 
-**Scope note.** This PoC was built standalone. Statements about Re:Earth CMS's *current*
-Geometry Editor / Geometry Object fields are inferred from the requirement document and
-from what this rebuild encountered — they are not derived from reading the CMS source.
+**Scope note.** This PoC was built standalone, but statements about Re:Earth CMS's *current*
+Geometry Editor / Geometry Object fields are no longer inferred: they were read from the
+source at commit `5cb0cbf82` and are set out in
+[current-implementation.md](./current-implementation.md), which answers Investigation Area 1
+of the research brief. This report cites that document rather than re-deriving it.
+
+**Backend caveat.** The backend definition for a unified Geometry field is not decided, and
+the stored structure is expected to change. Nothing below treats the *current* server shape
+— the bare-geometry value, the two supported-type enums — as a constraint or a blocker.
+They are recorded only where the frontend must avoid hard-coding them.
 
 ---
 
 ## 1. Why the editing methods are separated
 
-Text editing and map editing are usually kept apart because they have **incompatible
-update models**, not because anyone preferred two UIs.
+**In CMS specifically, the separation is two lines of code.** There is one component —
+`Common/Form/GeometryItem/index.tsx` — holding both panes, and one boolean decides which
+of them may write: `readOnly: disabled || isEditor` makes the JSON pane read-only in
+Geometry **Editor** mode (`:144`), and `isEditor && !disabled` hides the draw toolbar in
+Geometry **Object** mode (`:551`). Text → map rendering already runs in *both* modes. So
+the panes already share one value and already live in one component; what is withheld is
+write access, withheld symmetrically so only one pane is ever authoritative.
+
+**That is product design, not a technical limitation and not an OpenLayers constraint.**
+Full evidence in [current-implementation.md](./current-implementation.md) §3.
+
+It is a defensible original decision, because the problems it sidesteps are real. Any
+unified editor has to solve three of them, and this is what makes naive two-way binding
+fail:
 
 - **The text editor owns a string buffer that is invalid JSON most of the time.** Between
   the `{` and the matching `}`, the document does not parse. A naive binding would either
@@ -26,8 +45,7 @@ Wire them together naively and you get the two classic failures: the editor's te
 replaced under the user's cursor, and map ↔ text updates echo each other forever, because
 each round-trip produces a value that differs in the 14th decimal.
 
-**The separation is a workaround for those three problems, and all three are solvable.**
-This PoC solves them with:
+**All three are solvable.** This PoC solves them with:
 
 | Problem                    | Solution                                                                                                                   | Where                                 |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
@@ -39,8 +57,9 @@ The architecture is one canonical `FeatureCollection` in WGS84 held outside Reac
 every commit tagged by origin (`TEXT` / `MAP` / `NUMERIC` / `SEARCH`) and a monotonic
 `revision`. Each pane records the last revision it applied and ignores its own echo.
 
-**Conclusion: the separation is not technically necessary.** A single synchronised editor
-is achievable, and this PoC demonstrates it.
+**Conclusion: nothing blocks unification.** The separation is a permission flag guarding
+problems that are real but solved; removing the flag is safe once the sync model above is
+in place. This PoC demonstrates that model.
 
 ---
 
@@ -120,7 +139,19 @@ Its usage policy caps traffic at 1 req/s and asks for an identifying `User-Agent
 browsers refuse to let scripts set, so requests are identified only by `Referer`. Using it
 for CMS production traffic would breach the policy regardless of volume.
 
+**This is a present exposure, not a future one.** CMS already calls
+`https://nominatim.openstreetmap.org/search` directly from the browser
+(`GeometryItem/index.tsx:332`). The risk is therefore already taken; what the
+recommendation in §4 changes is that it stops being taken.
+
 ### 3.4 Geometry-type limitations
+
+The table below describes **this PoC**. For contrast, CMS today has no map-side editing of
+existing geometry at all: it imports `Draw` and nothing else — no `Modify`, `Translate`,
+`Select` or `Snap` — so a placed geometry can only be replaced by drawing a new one, behind
+a "this will replace the previously entered value" confirm
+([current-implementation.md](./current-implementation.md) §4.1). Everything in the "Map
+editing" column is therefore new capability, not capability to preserve.
 
 | Type                                        | Renders | Map editing | Numeric editing                             |
 | ------------------------------------------- | ------- | ----------- | ------------------------------------------- |
@@ -165,6 +196,10 @@ and those ids appear in the text pane. This is defensible — stable identity is
 regardless — but it is a visible behaviour change. The alternative is a side table keyed
 by array index, which breaks on reorder.
 
+**Whether this survives depends on the value shape the backend settles on.** Ids are a
+consequence of the PoC holding a `FeatureCollection`; a single-geometry value has nothing
+to diff and needs no ids (see §3.8).
+
 ### 3.6 Concurrent-edit conflicts need a real answer
 
 If the map changes while the user is mid-keystroke, silently overwriting destroys their
@@ -179,6 +214,32 @@ stub (use the top-level `json` namespace), and the old `monaco-editor/esm/vs/...
 specifiers no longer resolve because 0.56 ships an exports map rewriting `./*` to
 `./esm/vs/*.js`.
 
+### 3.8 The PoC's value shape does not match the field's — keep the adapter thin
+
+This PoC's store holds a `FeatureCollection` of many features. The CMS field today holds a
+**single bare GeoJSON geometry** serialized to a string, with repeated values carried as
+`string[]` — one geometry per entry, so a "multiple" Point field is N Points, not a
+MultiPoint ([current-implementation.md](./current-implementation.md) §2).
+
+The backend definition is undecided and this shape may change, which is the point: **the
+sync machinery must not assume either shape.** The origin/revision model, the 7-decimal
+rounding and the no-op suppression are all independent of the envelope, and the conversion
+should sit in one adapter at the store boundary rather than being spread through the panes.
+Written that way, a backend change is a one-file change.
+
+### 3.9 The current field rebuilds its map layer on every value change
+
+`sketch()` removes every layer above index 0 and constructs a fresh `VectorSource`,
+`VectorLayer` and `Style` each time the value changes — in Geometry Object mode, on every
+keystroke (`GeometryItem/index.tsx:426-466`). Two consequences worth carrying forward:
+
+- **It is the structural reason `Modify` cannot simply be added to the current code.** An
+  interaction bound to the source would be discarded on the next character typed. A
+  unified field needs the diffed-update model this PoC uses, not an incremental patch to
+  `sketch()`.
+- The view also re-`fit`s on every change in Object mode, because the guard is
+  `isInitRef.current || !isEditor` (`:454`) — the map recentres while the user types.
+
 ---
 
 ## 4. Recommendation
@@ -188,6 +249,14 @@ Google.**
 
 Mapped to the requirement's four options, this is *"keep the current provider and add a
 separate search service"*, with the nuance that search should be **two providers, not one**.
+
+One correction to the framing: **search is not a new integration, it is an existing one to
+redirect.** CMS already has a search box wired to Nominatim — it just calls
+`view.animate()` and never writes the value, so the user still has to draw manually on the
+newly centred map (`GeometryItem/index.tsx:328-347`). The missing piece the brief asks for,
+*"applying the result to a Geometry field"*, is the write. Two further things the existing
+integration lacks: it uses only `data[0]` and discards the rest, so there is no result list
+to choose from, and failures are `console.error` only.
 
 ### Why keep OpenLayers
 
@@ -242,7 +311,8 @@ Rough breakdown, assuming the recommendation above.
 **Decide first (blocking, ~1 week)**
 
 - Legal review of Yahoo! YOLP commercial terms, and of GSI's 利用規約 for CMS use.
-- Confirm CORS behaviour of GSI and YOLP from a browser; decide proxy vs direct.
+- Confirm CORS behaviour of YOLP from a browser; decide proxy vs direct. GSI and Nominatim
+  are already settled — both were verified working direct from the browser (§3.2).
 - Editor decision: lazy-loaded Monaco vs CodeMirror 6. Prototype CodeMirror to compare
   bundle and schema-autocomplete quality.
 
@@ -250,13 +320,22 @@ Rough breakdown, assuming the recommendation above.
 
 - Port the store, origin/revision sync and rounding into CMS's field architecture.
 - Wire to CMS's form state, validation and dirty-tracking; reconcile the "commit on
-  blur/Enter" model with how CMS saves fields.
+  blur/Enter" model with how CMS saves fields. The field is an antd `Form.Item` child with
+  `value`/`onChange` injected, and errors are lifted through an `errorSet` that rejects
+  submission — both already work and should be kept.
+- **Map-side editing is new work.** `Modify`, `Translate` and `Snap` do not exist in the
+  current field (§3.4), and the diffed layer update has to replace `sketch()`'s
+  teardown-and-rebuild before any of them can stay bound (§3.9).
+- Keep the value-shape conversion in a single adapter at the store boundary (§3.8) — the
+  backend definition is still open, so this is the part most likely to move.
 - Selection and focus as field-local state rather than a module singleton.
 - Accessibility: keyboard-only vertex editing, focus order, screen-reader labels — all
   absent from this PoC.
 
 **Search integration (~2 weeks)**
 
+- Redirect the **existing** search box so a chosen result writes the field value instead of
+  only panning the camera (§4), and surface the full result list rather than `data[0]`.
 - Provider abstraction is already the right shape (`GeocodeProvider`); add YOLP.
 - Server-side proxy for key-bearing providers, so no key reaches the browser.
 - Rate limiting, caching (respecting each provider's terms), error and empty states.
@@ -265,8 +344,9 @@ Rough breakdown, assuming the recommendation above.
 **Geometry-type completion (~2 weeks)**
 
 - Multi\* and GeometryCollection *numeric* editing, via sub-geometry selection in the store.
-  Map-side editing already works for all of them (§3.4), so this is inspector and store work
-  rather than map work — which is why it is smaller than the 2–3 weeks first estimated.
+  Once the interactions listed under Core field implementation are in place, ol handles
+  map-side editing for all of them (§3.4), so this remaining item is inspector and store
+  work rather than map work — which is why it is smaller than the 2–3 weeks first estimated.
 - GeometryCollection: decide whether to expose editing at all, or render read-only and
   document it. Recommend the latter for v1 — the selection model is the cost, not ol.
 - Performance work for large geometries — virtualised text rendering or a summary view
@@ -281,7 +361,8 @@ Rough breakdown, assuming the recommendation above.
 - Migration plan for existing Geometry Editor and Geometry Object field values —
   explicitly out of scope here, and likely the largest single unknown.
 
-**Rough total: 10–12 weeks**, excluding migration. The blocking decisions are cheap and
+**Rough total: 10–12 weeks**, frontend only — excluding migration, and excluding whatever
+the still-undecided backend definition brings with it. The blocking decisions are cheap and
 should be resolved first, because the editor choice and the YOLP terms both change the
 shape of the work.
 

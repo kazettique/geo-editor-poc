@@ -106,6 +106,33 @@ after 400 ms debouncing ≈ **40,000 requests/month**:
 At CMS's likely volume, cost is not the deciding factor — **licensing and Japanese POI
 quality are.**
 
+### Integration complexity and maintenance
+
+The brief asks for this axis explicitly. The useful distinction is not how hard the first
+call is — every option here is an HTTP GET returning JSON — but what each one obliges us to
+keep running afterwards.
+
+| Provider | Client integration | Server work required | Ongoing maintenance burden |
+|---|---|---|---|
+| **Nominatim** (public) | **Already wired in CMS** — plain GET via axios | None | Low code, **high policy**: the 1 req/s cap cannot be enforced from a browser, so compliance is permanently unverifiable |
+| **Self-hosted** (Nominatim/Photon/Pelias) | Identical to the above — swap the base URL | **High** — planet import, disk, a rebuild/update pipeline | **The only option with real infra ops.** Ranking tuning for Japanese POI becomes a standing project rather than a one-off |
+| **GSI** | Plain GET, no key; CORS verified direct from the browser | None | **Lowest.** Stable national endpoint, no key to rotate; the undocumented quota is the one unknown |
+| **YOLP** | Plain GET + `appid` | **Proxy required** — not for CORS, but so the key never reaches the browser | Low: one secret to rotate. JP-only, so it is structurally always a *second* provider beside another |
+| **Google Places** | SDK or REST; referrer-restricted key | None strictly, but the 30-day caching cap means deliberately *not* persisting results | **Highest, and it is licence work, not code.** Adopting it drags the renderer along with it |
+| **Mapbox Geocoding** | Plain REST, URL-restricted public token | None | Low: token rotation and attribution. The temporary-vs-permanent endpoint split is a compliance detail that must be got right per call |
+| **MapTiler** | Plain REST, domain-locked key | None | Low; logo requirement on the free tier is a UI obligation |
+| **LocationIQ** | Plain REST, key in browser | Proxy advisable | Low |
+
+Two conclusions:
+
+- **Integration effort does not discriminate between these options.** Every one of them is
+  a day's work behind the `GeocodeProvider` interface the PoC already defines.
+- **Maintenance does.** The spread runs from GSI (nothing to maintain) through YOLP (one
+  proxied secret) to self-hosting (permanent ops) and Google (permanent licence exposure).
+  The recommended GSI + YOLP pairing sits at the cheap end of that range, and the one
+  genuinely expensive option — self-hosted Nominatim — is only worth it if international
+  coverage later becomes a first-class requirement.
+
 ---
 
 ## 4. Map stack — the three concerns are separable
@@ -129,7 +156,7 @@ working untouched (`src/map/baseMaps.ts`).
 
 | Option | Strengths | Trade-offs |
 |---|---|---|
-| **ol/interaction Draw + Modify + Snap + Translate** *(current)* | Built in, no extra dependency, mature; vertex-level editing and snapping work out of the box | **No GeometryCollection support in Modify** (see report) |
+| **ol/interaction Draw + Modify + Snap + Translate** *(CMS ships `Draw` only)* | Built in, no extra dependency, mature; vertex-level editing and snapping work out of the box, and `Modify` handles every geometry type including `GeometryCollection` | `Draw` cannot *produce* a `GeometryCollection`; numeric vertex addressing is ours to build. CMS today imports none of `Modify`/`Snap`/`Translate`, so this is new capability |
 | **Terra Draw** | Renderer-agnostic (MapLibre, Leaflet, ol, Google) | Younger; another dependency to track |
 | **mapbox-gl-draw** | Well-established | Tied to the GL renderer; MultiGeometry support is partial |
 | **Leaflet-Geoman** | Rich UX, good free tier | Leaflet-only; advanced features are paid |
@@ -142,3 +169,51 @@ reason to leave it.
 Fully separable from both of the above — **except for Google**, whose terms couple search
 to rendering. That coupling is the single most important constraint in this whole
 comparison.
+
+CMS already proves the separation in production: it pairs Nominatim search with OSM tiles
+and ol rendering, three unrelated suppliers, with no coupling between them
+(`GeometryItem/index.tsx:290-347`). Changing the geocoder touches one `useCallback`.
+
+---
+
+## 5. Performance
+
+The brief lists performance as a recommendation criterion. Measured against the options
+above, it does not discriminate between them — but it does discriminate sharply between
+choices *inside* our own code, which is worth stating plainly.
+
+| Cost centre | Magnitude | Whose choice |
+|---|---|---|
+| **Geocoding round-trip** | Network-bound, ~100–400 ms for every option | Nobody's — identical across providers |
+| **Raster vs vector tiles** | Raster is heavier at high zoom and cannot restyle at runtime | Provider's, but immaterial for a small fixed-style form-field map |
+| **Map library weight** | ol ≈ 330 kB raw / 96 kB gzip | Provider's — and already paid, ol is a dependency today |
+| **Text editor weight** | Monaco ≈ 3.6 MB even trimmed to JSON-only — **an order of magnitude larger than the map** | **Ours** (report §3.1) |
+| **Layer teardown per keystroke** | Full `VectorSource`/`VectorLayer`/`Style` rebuild on every value change | **Ours** (report §3.9) |
+| **Large-geometry serialization** | A thousand-vertex polygon re-serialized on every map gesture | **Ours** (report §3.4) |
+
+**The conclusion is that performance is not a reason to change provider.** The two largest
+costs in the current field are the editor bundle and our own update model; the third is the
+layer rebuild, which is a present defect in CMS rather than a limitation of anything in the
+tables above. Replacing OpenLayers would not move any of them.
+
+---
+
+## 6. Compatibility with the existing CMS architecture
+
+The last of the brief's recommendation criteria, and the one that most favours keeping the
+current stack.
+
+| Existing constraint | Effect on the recommendation |
+|---|---|
+| **`ol` is already a dependency**, used by exactly one component | Keeping it costs nothing new. It also means a renderer swap would touch only that component — real, but it buys nothing (§5) |
+| **Cesium/resium are present but unrelated** — they serve `Asset/Viewers/*` | Not reusable here: 3D globe, different interaction model. There is no "consolidate on one map library" win available |
+| **The field is an antd `Form.Item` child** with `value`/`onChange` injected | The PoC's store must sit *behind* that contract, not replace it. Commit-on-blur/Enter has to reconcile with how antd tracks dirty state |
+| **Validation lifts through an `errorSet`** that rejects form submission | Already the right shape; the PoC's status-bar model should feed it rather than duplicate it |
+| **Search is already wired** to a geocoder | Adding the `GeocodeProvider` abstraction is a refactor of existing code, not a greenfield integration |
+| **i18n runs through `useT`** | Provider attribution and error states are translatable strings, not literals — a licence obligation with an i18n cost |
+| **The stored value shape is backend-owned and under redefinition** | Keep conversion in one adapter at the store boundary (report §3.8). This is the only part of the design that should be expected to move |
+
+Nothing in the current architecture resists the unified editor. The one genuine friction
+point is the form contract: the PoC commits eagerly to a module-level store, and CMS
+expects a controlled component that reports upward. That is a wiring problem, not a
+design problem.

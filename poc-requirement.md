@@ -1,5 +1,11 @@
 # POC Requirement
 
+> **Note.** This document was derived from the fuller research brief and its numbering
+> starts at §2 because **Investigation Area 1 — "Current separation between map and text
+> editing" — was omitted here.** That area is answered separately in
+> [`docs/current-implementation.md`](./docs/current-implementation.md), read from the
+> Re:Earth CMS source rather than from this document.
+
 ## Brief
 
 A geo editor can edit geojson data and preview it at the same time. It will have geojson editor, map preview and text search section.

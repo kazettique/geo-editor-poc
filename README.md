@@ -12,14 +12,24 @@ bun dev          # http://localhost:5173
 
 ## Deliverables
 
-| Document                                     | Contents                                                                                                                            |
-| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| [`docs/report.md`](./docs/report.md)         | Why the editing methods are separated, blockers and limitations, recommendation, follow-up breakdown, manual verification checklist |
-| [`docs/comparison.md`](./docs/comparison.md) | Location-search and map-stack option tables, with measured results                                                                  |
+| Document                                                             | Contents                                                                                                                            |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| [`docs/current-implementation.md`](./docs/current-implementation.md) | How CMS edits geometry today, read from the source: data flow, why the two methods are separated, what the current field cannot do  |
+| [`docs/report.md`](./docs/report.md)                                 | Blockers and limitations, recommendation, follow-up breakdown, manual verification checklist                                        |
+| [`docs/comparison.md`](./docs/comparison.md)                         | Location-search and map-stack option tables with measured results, plus maintenance, performance and CMS-compatibility criteria     |
 
-**Headline finding:** neither free geocoder gives usable Japanese place-name search — GSI
-is address-only, and Nominatim ranks footpaths above Tokyo Station. Google has the data
-but its licence forbids pairing it with a non-Google map. See the report.
+**Headline findings:**
+
+1. **The separation is a permission flag, not a technical limit.** CMS already renders both
+   panes from one component and one value; `isEditor` makes the JSON pane read-only in
+   Geometry Editor mode and hides the draw toolbar in Geometry Object mode. Nothing blocks
+   unification. Related: the current field imports `Draw` only, so an existing point cannot
+   be *moved* on the map at all — only replaced by redrawing.
+2. **Search already exists and only pans the camera.** The missing piece is writing the
+   result into the field.
+3. **Neither free geocoder gives usable Japanese place-name search** — GSI is address-only,
+   and Nominatim ranks footpaths above Tokyo Station. Google has the data but its licence
+   forbids pairing it with a non-Google map.
 
 ## Architecture
 
