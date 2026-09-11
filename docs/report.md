@@ -275,8 +275,22 @@ Added after the original write-up, so these are new rather than revised:
   four vertex fields into one undo step, because the 600 ms coalescing window keys on origin
   alone and `NumberField` commits only on blur or Enter — there is no per-keystroke burst
   for it to usefully merge.
+- **Selection is shared in both directions, and neither side yanks the other.** Clicking
+  anywhere in a card selects the feature; clicking a shape on the map scrolls the matching
+  card into view. Each reveal is conditional: the map recentres only when the target is
+  outside the viewport (`FocusMode.IF_OFFSCREEN`, checked with `view.calculateExtent` +
+  `containsCoordinate`), and the form uses `scrollIntoView({ block: "nearest" })`, which is
+  the browser's own version of the same test. A search result and a newly added feature
+  still recentre unconditionally — that is `FocusMode.ALWAYS`, and it is why the mode rides
+  on the request rather than living in the map's effect, which all three callers share.
+  The feature id in the card header remains the one control that recentres on something
+  already visible.
+- **A collapsed card stays collapsed when selected from the map.** Deliberate: a collapse the
+  user set by hand should outlive a map click. It does mean a map selection can highlight a
+  card whose vertices are hidden.
 - **No accessibility work.** Keyboard-only vertex editing, focus order and screen-reader
-  labelling are as absent here as everywhere else in the PoC (§5).
+  labelling are as absent here as everywhere else in the PoC (§5). The card does at least
+  select on `onFocusCapture`, so tabbing into a vertex field selects its feature.
 
 ---
 
@@ -491,7 +505,7 @@ not the code.
     (`src/core/GeoUtils.ts:214-221`).
 11. **Base maps** ✅ — toggle OSM ↔ 地理院淡色 and confirm editing and search are unaffected.
 
-### Form pane — steps 12-19
+### Form pane — steps 12-25
 
 Added with the form editor (§3.10). **Not yet walked in a browser**; steps 1-11 above were.
 The geometry and store layers underneath them are covered by 102 scratch checks (82 on the
@@ -526,6 +540,21 @@ geometry helpers, 20 on store semantics), which are again uncommitted — same �
     a **disabled** option alongside the three editable targets; picking Polygon warns first.
     Then paste a polygon with over 200 vertices and confirm the card renders 200 rows plus the
     "Showing 200 of N" notice, and that the pane stays responsive.
+20. **Off-screen select** — pan until the seeded feature is out of view, then click its card.
+    The map pans to it. Click the same card again: nothing moves, because it is now visible.
+21. **On-screen select** — with two features both visible, click between their cards. The
+    highlight moves and **the map does not pan at all.**
+22. **Explicit centre still works** — click the feature **id** on a feature that is already
+    visible. The map centres and zooms to at least `DEFAULT_ZOOM`. This is the only control
+    that moves the map for something already on screen.
+23. **Map → form** — add enough features to overflow the form's scroll container, scroll to
+    the top, then click the last feature's shape on the map. Its card scrolls into view and
+    highlights. Then click a shape whose card is already visible: the form must not scroll.
+24. **Search unchanged** — re-run step 9. The map must still recentre on an applied result
+    **even when the target is already on screen.** If it does not, `FocusMode` is defaulting
+    wrongly and the regression is in `geoStore.focus`, not in the form.
+25. **Delete does not dangle** — click a card, then its `✕`. The header's `sel` readout must
+    show `—` rather than the id of the feature that was just removed.
 
 ```bash
 bun run build    # tsc -b + vite build

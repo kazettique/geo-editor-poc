@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { Feature, Position } from "geojson";
 import { GeoUtils } from "../core/GeoUtils";
 import { geoStore } from "../core/geoStore";
@@ -15,6 +16,16 @@ interface GeoFormProps {
  */
 function GeoForm({ snapshot }: GeoFormProps) {
   const features: Feature[] = snapshot.collection.features;
+  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // Reveal whatever the map just selected. `block: "nearest"` is the browser's own
+  // off-screen test, so a card already in view does not move and this never fights a
+  // user who is part-way through scrolling the list.
+  useEffect(() => {
+    if (snapshot.selectedId === null) return;
+    cardRefs.current.get(snapshot.selectedId)?.scrollIntoView({ block: "nearest" });
+  }, [snapshot.selectedId]);
+
   const addFeature = (): void => {
     // Seed beside whatever the user is already looking at — the selection first, then
     // whatever is last in the document — so the new point lands in view and offset rather
@@ -40,13 +51,22 @@ function GeoForm({ snapshot }: GeoFormProps) {
             pane.
           </p>
         ) : (
-          features.map((feature: Feature) => (
-            <FeatureCard
-              key={String(feature.id)}
-              feature={feature}
-              selected={String(feature.id) === snapshot.selectedId}
-            />
-          ))
+          features.map((feature: Feature) => {
+            const id: string = String(feature.id);
+            return (
+              <FeatureCard
+                key={id}
+                ref={(node: HTMLDivElement | null) => {
+                  if (node) cardRefs.current.set(id, node);
+                  return () => {
+                    cardRefs.current.delete(id);
+                  };
+                }}
+                feature={feature}
+                selected={id === snapshot.selectedId}
+              />
+            );
+          })
         )}
       </div>
 

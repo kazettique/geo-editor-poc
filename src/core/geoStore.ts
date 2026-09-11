@@ -1,6 +1,12 @@
 import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
 import { GeoUtils } from "./GeoUtils";
-import { EditOrigin, GeometryKind, type GeoSnapshot, type HistoryEntry } from "./types";
+import {
+  EditOrigin,
+  FocusMode,
+  GeometryKind,
+  type GeoSnapshot,
+  type HistoryEntry,
+} from "./types";
 
 /** Seeded so the PoC opens with an existing point already loaded on the map. */
 export const INITIAL_COLLECTION: FeatureCollection = {
@@ -44,8 +50,11 @@ export interface GeoStore {
   addFeature(geometry: Geometry, origin: EditOrigin): string;
   removeFeature(featureId: string, origin: EditOrigin): void;
   select(featureId: string | null): void;
-  /** Ask the map to recentre — view state, so it does not touch `revision`. */
-  focus(position: Position): void;
+  /**
+   * Ask the map to recentre — view state, so it does not touch `revision`. Selecting from
+   * a list wants IF_OFFSCREEN; a search result or a freshly added feature wants ALWAYS.
+   */
+  focus(position: Position, mode?: FocusMode): void;
   undo(): void;
   redo(): void;
   /**
@@ -199,9 +208,9 @@ export function createGeoStore(initial: FeatureCollection): GeoStore {
       emit();
     },
 
-    focus: (position: Position): void => {
+    focus: (position: Position, mode: FocusMode = FocusMode.ALWAYS): void => {
       const nonce: number = (snapshot.focus?.nonce ?? 0) + 1;
-      snapshot = { ...snapshot, focus: { position, nonce } };
+      snapshot = { ...snapshot, focus: { position, nonce, mode } };
       emit();
     },
 

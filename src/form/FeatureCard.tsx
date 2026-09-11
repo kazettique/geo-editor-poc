@@ -1,8 +1,14 @@
-import { Fragment, useState } from "react";
+import { Fragment, useState, type Ref } from "react";
 import type { Feature, Geometry, Position } from "geojson";
 import { GeoUtils } from "../core/GeoUtils";
 import { geoStore } from "../core/geoStore";
-import { EDITABLE_KINDS, EditOrigin, GeometryKind, type VertexRef } from "../core/types";
+import {
+  EDITABLE_KINDS,
+  EditOrigin,
+  FocusMode,
+  GeometryKind,
+  type VertexRef,
+} from "../core/types";
 import NumberField from "../inspector/NumberField";
 
 /** Beyond this the pane stops being usable, so the tail stays in the text pane. */
@@ -11,6 +17,8 @@ const MAX_VERTEX_ROWS = 200;
 interface FeatureCardProps {
   feature: Feature;
   selected: boolean;
+  /** Lets the form scroll this card into view when the map selects its feature. */
+  ref?: Ref<HTMLDivElement>;
 }
 
 /**
@@ -18,7 +26,7 @@ interface FeatureCardProps {
  * its feature through unrelated commits and resets when a paste or an undo brings in a
  * different document.
  */
-function FeatureCard({ feature, selected }: FeatureCardProps) {
+function FeatureCard({ feature, selected, ref }: FeatureCardProps) {
   const [open, setOpen] = useState<boolean>(true);
 
   const featureId: string = String(feature.id);
@@ -71,9 +79,25 @@ function FeatureCard({ feature, selected }: FeatureCardProps) {
     geoStore.setGeometry(featureId, next, EditOrigin.FORM);
   };
 
+  const selectThis = (): void => {
+    // Clicks land here constantly — every click into a coordinate input bubbles up — so
+    // do nothing once this card already owns the selection.
+    if (selected) return;
+    geoStore.select(featureId);
+    // Highlighting a shape the user cannot see reads as nothing having happened.
+    const position: Position | null = GeoUtils.firstPosition(geometry);
+    if (position) geoStore.focus(position, FocusMode.IF_OFFSCREEN);
+  };
+
   return (
+    // Selecting from anywhere in the card, rather than from the id alone, so editing a
+    // vertex highlights the feature it belongs to on the map. onFocusCapture covers the
+    // keyboard path, which a click handler alone would miss.
     <div
-      className={`rounded border ${selected ? "border-slate-500 bg-slate-50" : "border-slate-200"}`}
+      ref={ref}
+      onClick={selectThis}
+      onFocusCapture={selectThis}
+      className={`rounded border ${selected ? "border-slate-500 bg-slate-50" : "border-slate-200 hover:border-slate-300"}`}
     >
       <div className="flex items-center gap-1.5 px-1.5 py-1">
         <button
@@ -90,11 +114,10 @@ function FeatureCard({ feature, selected }: FeatureCardProps) {
         <button
           type="button"
           onClick={() => {
-            geoStore.select(featureId);
             const position: Position | null = GeoUtils.firstPosition(geometry);
             if (position) geoStore.focus(position);
           }}
-          title="Select and centre on the map"
+          title="Centre the map on this feature"
           className="font-mono text-[11px] text-slate-600 hover:text-slate-900"
         >
           {featureId}
@@ -126,7 +149,9 @@ function FeatureCard({ feature, selected }: FeatureCardProps) {
 
         <button
           type="button"
-          onClick={() => {
+          onClick={(event) => {
+            // Without this the card's own handler re-selects the id we just deleted.
+            event.stopPropagation();
             geoStore.removeFeature(featureId, EditOrigin.FORM);
           }}
           title="Remove feature"

@@ -7,12 +7,13 @@ import View from "ol/View";
 import VectorLayer from "ol/layer/Vector";
 import type TileLayer from "ol/layer/Tile";
 import VectorSource from "ol/source/Vector";
-import { isEmpty, type Extent } from "ol/extent";
+import { containsCoordinate, isEmpty, type Extent } from "ol/extent";
 import { fromLonLat } from "ol/proj";
+import type { Coordinate } from "ol/coordinate";
 import "ol/ol.css";
 import { GeoUtils } from "../core/GeoUtils";
 import { geoStore } from "../core/geoStore";
-import { EditOrigin, type GeoSnapshot } from "../core/types";
+import { EditOrigin, FocusMode, type GeoSnapshot } from "../core/types";
 import { BaseMapId, BaseMaps } from "./baseMaps";
 import DrawToolbar from "./DrawToolbar";
 import { MapStyle } from "./mapStyle";
@@ -112,14 +113,28 @@ function MapView({ snapshot }: MapViewProps) {
     handles?.layer.changed();
   }, [handles, snapshot.selectedId]);
 
-  // Recentre on an explicit request (a search result), which is the only case where
-  // moving the viewport out from under the user is what they asked for.
+  // Recentre on an explicit request — a search result, a newly added feature, or a
+  // selection the user cannot currently see. Anything else moving the viewport out from
+  // under them would be unasked for.
   useEffect(() => {
     const focus = snapshot.focus;
     if (!handles || !focus) return;
     const view = handles.map.getView();
+    const centre: Coordinate = fromLonLat(focus.position);
+
+    // getSize() is undefined until the map has been laid out once. With no viewport to
+    // test against, recentre rather than silently do nothing.
+    const size = handles.map.getSize();
+    if (
+      focus.mode === FocusMode.IF_OFFSCREEN &&
+      size &&
+      containsCoordinate(view.calculateExtent(size), centre)
+    ) {
+      return;
+    }
+
     view.animate({
-      center: fromLonLat(focus.position),
+      center: centre,
       zoom: Math.max(view.getZoom() ?? 0, GeoUtils.DEFAULT_ZOOM),
       duration: 400,
     });

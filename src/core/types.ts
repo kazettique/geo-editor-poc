@@ -38,10 +38,18 @@ export const EDITABLE_KINDS: readonly GeometryKind[] = [
   GeometryKind.POLYGON,
 ];
 
+export enum FocusMode {
+  /** Recentre unconditionally — the user asked to be taken there. */
+  ALWAYS = "ALWAYS",
+  /** Recentre only when the target lies outside the current viewport. */
+  IF_OFFSCREEN = "IF_OFFSCREEN",
+}
+
 /** A request for the map to recentre. `nonce` makes repeat requests distinguishable. */
 export interface FocusRequest {
   readonly position: Position;
   readonly nonce: number;
+  readonly mode: FocusMode;
 }
 
 /** One restorable point in the document's history. */
