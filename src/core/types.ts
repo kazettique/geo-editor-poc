@@ -9,6 +9,12 @@ export enum EditOrigin {
   TEXT = "TEXT",
   MAP = "MAP",
   NUMERIC = "NUMERIC",
+  /**
+   * Any edit from the GeoJSON form pane. Deliberately not a coalescing origin: the pane
+   * shows every vertex at once, and NUMERIC's 600ms window would fold a tab across four
+   * unrelated fields into a single undo step.
+   */
+  FORM = "FORM",
   SEARCH = "SEARCH",
   /** A jump through the undo/redo stack rather than a fresh edit. */
   HISTORY = "HISTORY",

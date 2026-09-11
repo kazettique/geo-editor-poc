@@ -1,7 +1,8 @@
 # Geo Editor PoC
 
 A non-production proof of concept for a Geometry field that keeps a **GeoJSON text
-editor**, an **interactive map** and a **location search** bi-directionally in sync.
+editor**, a **form editor**, an **interactive map** and a **location search**
+bi-directionally in sync.
 
 Built against [`poc-requirement.md`](./poc-requirement.md).
 
@@ -43,6 +44,7 @@ current state are dropped — together these stop the panes rewriting each other
 src/
   core/       store, GeoJSON validation (zod), geometry helpers
   editor/     Monaco pane — JSON-only build, schema-driven autocomplete
+  form/       the same document as controls — geometry type, vertices, features
   map/        OpenLayers — rendering, diffed sync, Draw/Modify/Translate/Snap
   inspector/  numeric lat/lng editing, vertex addressing
   search/     GeocodeProvider abstraction + Nominatim and GSI implementations

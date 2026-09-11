@@ -1,7 +1,8 @@
 import { useState } from "react";
 
 interface NumberFieldProps {
-  label: string;
+  /** Omitted where the caller prints a column header instead of a per-field label. */
+  label?: string;
   value: number;
   min: number;
   max: number;
@@ -38,7 +39,7 @@ function NumberField({ label, value, min, max, onCommit }: NumberFieldProps) {
 
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-[11px] text-slate-500">{label}</span>
+      {label !== undefined && <span className="text-[11px] text-slate-500">{label}</span>}
       <input
         type="text"
         inputMode="decimal"

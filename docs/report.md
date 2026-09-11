@@ -158,8 +158,8 @@ editing" column is therefore new capability, not capability to preserve.
 | Point                                       | Yes     | Yes         | Yes                                         |
 | LineString                                  | Yes     | Yes         | Yes, per vertex                             |
 | Polygon                                     | Yes     | Yes         | Yes, per vertex, ring closure maintained    |
-| MultiPoint / MultiLineString / MultiPolygon | Yes     | Yes         | **No** — surfaced in the UI as non-editable |
-| GeometryCollection                          | Yes     | Yes         | **No** — surfaced in the UI as non-editable |
+| MultiPoint / MultiLineString / MultiPolygon | Yes     | Yes         | **Not directly** — surfaced as non-editable, but convertible to an editable kind |
+| GeometryCollection                          | Yes     | Yes         | **Not directly** — same escape hatch        |
 
 Details worth carrying forward:
 
@@ -174,11 +174,16 @@ Details worth carrying forward:
   An earlier draft of this report stated that ol's `Modify` had no `GeometryCollection`
   support. That was wrong, and it inflated the estimate in §5.
 - **What is actually missing is the numeric layer.** `GeoUtils.listVertices` returns `[]` for
-  every Multi\* type and for `GeometryCollection` (`src/core/GeoUtils.ts:146`), and
-  `GeoUtils.setVertex` passes them through unchanged (`:179`). The inspector therefore cannot
-  address their vertices, and says so. Closing this means a sub-geometry selection model in
-  *our* store — which ring, which polygon, which child geometry you are editing — not an ol
-  capability.
+  every Multi\* type and for `GeometryCollection`, and `GeoUtils.setVertex` passes them
+  through unchanged. The inspector therefore cannot address their vertices, and says so.
+  Closing this means a sub-geometry selection model in *our* store — which ring, which
+  polygon, which child geometry you are editing — not an ol capability.
+- **The form pane softens this from a dead end into a one-way door.** `GeoUtils.flattenPositions`
+  walks all seven kinds, so the form's type selector can convert a MultiPolygon or a
+  GeometryCollection *down* to Point, LineString or Polygon, warning first with the exact count
+  of positions it would discard. That is a usable escape hatch, not a substitute for the
+  selection model — the conversion is one-way and flattens every source ring into a single
+  ring, which keeps all positions but can produce a self-intersecting polygon.
 - **`Draw` still cannot produce a `GeometryCollection`.** That half of the original note holds.
   The data path is fine regardless: it round-trips through ol's GeoJSON format losslessly
   (verified).
@@ -206,6 +211,12 @@ If the map changes while the user is mid-keystroke, silently overwriting destroy
 typing. The PoC detects this and shows a "Changed elsewhere while you were typing —
 Discard & reload" bar. That is honest but minimal; a production field with collaborative
 editing needs a considered merge story.
+
+The **form pane has no equivalent guard.** A map drag or a text edit that lands while a
+coordinate field is mid-typing replaces the draft outright, because `NumberField` resets
+its draft whenever the `value` prop changes. That was already true of the inspector; the
+form makes it far more visible, since every vertex of the selected feature is on screen
+during a drag. Same merge story, more surface.
 
 ### 3.7 monaco 0.56 API breaks
 
@@ -239,6 +250,33 @@ keystroke (`GeometryItem/index.tsx:426-466`). Two consequences worth carrying fo
   `sketch()`.
 - The view also re-`fit`s on every change in Object mode, because the guard is
   `isInitRef.current || !isEditor` (`:454`) — the map recentres while the user types.
+
+---
+
+### 3.10 The form pane's own limitations
+
+Added after the original write-up, so these are new rather than revised:
+
+- **Row cap.** A feature renders at most 200 vertex rows, then says
+  *"Showing 200 of N vertices — edit the rest in the text pane."* The cap is applied inside
+  `GeoUtils.listVertices` rather than by slicing its result, so a 5,000-vertex paste never
+  allocates 5,000 refs per commit. Production wants virtualised rows instead.
+- **Column order differs from the inspector.** The form shows **Longitude then Latitude**,
+  matching GeoJSON's `[lon, lat]` document order, because it is a view of the JSON. The
+  inspector shows Latitude first. Both are defensible alone; together they are a wart, and
+  a production field should pick one.
+- **Type conversion is one-way and lossy by design.** It is gated on a confirm that names
+  the exact number of positions being discarded (`GeoUtils.droppedPositions` compares
+  positions by value, not by count, so a conversion that derives new positions while
+  dropping real ones is still reported as lossy). There is no "convert back" — undo is the
+  only route back.
+- **Undo granularity is per edit, deliberately.** Form commits carry `EditOrigin.FORM`,
+  which is *not* in `COALESCING_ORIGINS`. Reusing `NUMERIC` would have folded a tab across
+  four vertex fields into one undo step, because the 600 ms coalescing window keys on origin
+  alone and `NumberField` commits only on blur or Enter — there is no per-keystroke burst
+  for it to usefully merge.
+- **No accessibility work.** Keyboard-only vertex editing, focus order and screen-reader
+  labelling are as absent here as everywhere else in the PoC (§5).
 
 ---
 
@@ -452,6 +490,42 @@ not the code.
     11; most likely the pasted JSON differed, but if it recurs, suspect `GeoUtils.countNested`
     (`src/core/GeoUtils.ts:214-221`).
 11. **Base maps** ✅ — toggle OSM ↔ 地理院淡色 and confirm editing and search are unaffected.
+
+### Form pane — steps 12-19
+
+Added with the form editor (§3.10). **Not yet walked in a browser**; steps 1-11 above were.
+The geometry and store layers underneath them are covered by 102 scratch checks (82 on the
+geometry helpers, 20 on store semantics), which are again uncommitted — same §5 Hardening item.
+
+12. **Both blocks open** — the GeoJSON pane splits into a Text block and a Form block, both
+    expanded, with the seeded `f1` card showing one `Coordinate` row.
+13. **Collapse round-trip — the Monaco test.** Type a broken brace so the status bar turns
+    red, collapse Text, re-expand. **The broken text, the red bar, the caret and the scroll
+    position must all still be there.** They are only preserved because the block is hidden
+    rather than unmounted: `@monaco-editor/react` disposes the model on unmount, and
+    `JsonEditor`'s cleanup clears a pending 300 ms commit, so an edit typed just before
+    collapsing would be silently lost.
+14. **Form → map → text** — edit a longitude, press Enter: the marker moves and the JSON
+    follows at 7 decimals. Esc mid-edit reverts the field without committing.
+15. **Type conversion, lossless** — set `f1` to LineString (2 rows, no confirm), then Polygon
+    (3 rows, no confirm), then back to LineString (all vertices kept, no confirm).
+16. **Type conversion, lossy** — with the Polygon selected choose Point. The confirm names
+    the discarded count. **Cancel: the select must snap back to Polygon** and the map must not
+    move. Accept: one row remains, and a single ⌘Z restores the whole polygon.
+17. **Ring-aware insert and remove** — on a Polygon, `+` on the **last** row inserts the
+    midpoint between it and vertex 1; check the JSON shows the ring still closed. Remove rows
+    until `✕` disables at 3 vertices. Then edit Vertex 1's latitude and confirm the closing
+    position tracks it.
+18. **Undo granularity** — add a vertex, convert the type, add a feature: three ⌘Z presses,
+    each undoing exactly one action (focus must be outside an input). Then edit two different
+    coordinate fields within half a second and confirm they are **two** undo steps, not one —
+    that is what `EditOrigin.FORM` buys over `NUMERIC`. Finally, focus a coordinate input,
+    type, and press ⌘Z: only the text undoes, the map does not move.
+19. **Non-editable types and the cap** — re-paste the step 10 payload. The `mpoly` card shows
+    the non-editable hint with its position count, and its type select shows `MultiPolygon` as
+    a **disabled** option alongside the three editable targets; picking Polygon warns first.
+    Then paste a polygon with over 200 vertices and confirm the card renders 200 rows plus the
+    "Showing 200 of N" notice, and that the pane stays responsive.
 
 ```bash
 bun run build    # tsc -b + vite build

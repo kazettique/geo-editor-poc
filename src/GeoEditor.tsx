@@ -1,15 +1,19 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { geoStore } from "./core/geoStore";
 import type { GeoSnapshot } from "./core/types";
 import { useGeoSnapshot } from "./core/useGeoStore";
 import JsonEditor from "./editor/JsonEditor";
+import GeoForm from "./form/GeoForm";
 import CoordinateInputs from "./inspector/CoordinateInputs";
+import Collapsible from "./layout/Collapsible";
 import Pane from "./layout/Pane";
 import MapView from "./map/MapView";
 import SearchPanel from "./search/SearchPanel";
 
 function GeoEditor() {
   const snapshot = useGeoSnapshot();
+  const [textOpen, setTextOpen] = useState<boolean>(true);
+  const [formOpen, setFormOpen] = useState<boolean>(true);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
@@ -52,7 +56,26 @@ function GeoEditor() {
 
       <main className="grid min-h-0 flex-1 grid-cols-[minmax(320px,2fr)_minmax(0,3fr)_minmax(280px,1fr)] gap-px bg-slate-300">
         <Pane title="GeoJSON">
-          <JsonEditor snapshot={snapshot} />
+          <div className="flex h-full min-h-0 flex-col">
+            <Collapsible
+              title="Text"
+              open={textOpen}
+              onToggle={() => {
+                setTextOpen(!textOpen);
+              }}
+            >
+              <JsonEditor snapshot={snapshot} />
+            </Collapsible>
+            <Collapsible
+              title="Form"
+              open={formOpen}
+              onToggle={() => {
+                setFormOpen(!formOpen);
+              }}
+            >
+              <GeoForm snapshot={snapshot} />
+            </Collapsible>
+          </div>
         </Pane>
 
         <Pane title="Map">
