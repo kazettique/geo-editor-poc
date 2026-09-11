@@ -24,6 +24,8 @@ function JsonEditor({ snapshot }: JsonEditorProps) {
   const appliedRevisionRef = useRef<number>(snapshot.revision);
   /** True while the text has diverged from the store and is not committed yet. */
   const dirtyRef = useRef<boolean>(false);
+  /** Caret and scroll captured just before a store-driven overwrite, awaiting restore. */
+  const viewStateRef = useRef<editor.ICodeEditorViewState | null>(null);
 
   const applyFromStore = useCallback((next: GeoSnapshot): void => {
     // A commit still in flight would land after this and silently reinstate the
@@ -32,6 +34,7 @@ function JsonEditor({ snapshot }: JsonEditorProps) {
       window.clearTimeout(timerRef.current);
       timerRef.current = null;
     }
+    viewStateRef.current = editorRef.current?.saveViewState() ?? null;
     setText(GeoUtils.stringify(next.collection));
     appliedRevisionRef.current = next.revision;
     dirtyRef.current = false;
@@ -56,6 +59,17 @@ function JsonEditor({ snapshot }: JsonEditorProps) {
     applyFromStore(snapshot);
   }, [snapshot, applyFromStore]);
 
+  // The controlled `value` round-trip replaces the whole model with forceMoveMarkers
+  // and no end cursor state, which parks the caret at the end of the document. Child
+  // effects run first, so by now the editor has applied that edit and we can put the
+  // caret and scroll back where the user left them.
+  useEffect(() => {
+    const viewState: editor.ICodeEditorViewState | null = viewStateRef.current;
+    if (viewState === null) return;
+    viewStateRef.current = null;
+    editorRef.current?.restoreViewState(viewState);
+  }, [text]);
+
   useEffect(() => {
     return () => {
       if (timerRef.current !== null) window.clearTimeout(timerRef.current);
@@ -66,6 +80,7 @@ function JsonEditor({ snapshot }: JsonEditorProps) {
     const next: string = value ?? "";
     setText(next);
     dirtyRef.current = true;
+    viewStateRef.current = null;
 
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(() => {
