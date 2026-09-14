@@ -7,7 +7,7 @@ import { GEOJSON_SCHEMA, GEOJSON_SCHEMA_URI } from "./geojsonSchema";
 import { jsonDefaults, monaco } from "./monacoRuntime";
 
 // Without this, @monaco-editor/react silently pulls Monaco off a CDN at runtime,
-// which breaks offline use and is not acceptable inside CMS.
+// which breaks offline use and is not acceptable inside a host application.
 window.MonacoEnvironment = {
   getWorker(_workerId: string, label: string): Worker {
     return label === "json" ? new JsonWorker() : new EditorWorker();

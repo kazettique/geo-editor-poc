@@ -33,7 +33,7 @@ Two conclusions, and the second is the one that drives the recommendation:
    footpaths and stairs. This is not a general ranking flaw — it is how large Japanese
    station complexes are modelled in OSM: dozens of `highway=footway` ways carry the
    station's name, and each outranks the station node on `importance`. The gap is
-   specific to Japan, which is precisely where CMS needs it to work.
+   specific to Japan, which is precisely where the host needs it to work.
 
 **Neither free option, alone or combined, delivers acceptable Japanese place-name search.**
 
@@ -83,7 +83,7 @@ Using Google Places or Geocoding to populate a Geometry field rendered on OpenLa
 OSM/GSI tiles is **not permitted**. Adopting Google for search therefore means adopting
 Google for rendering too — a far larger change than "add a search box", and one that
 also brings a 30-day cap on caching results (§10.5(4)), which conflicts with storing a
-geocoded coordinate in a CMS field indefinitely.
+geocoded coordinate in a field indefinitely.
 
 This is why Google, despite having the best Japanese POI data, is not the
 recommendation.
@@ -103,7 +103,7 @@ after 400 ms debouncing ≈ **40,000 requests/month**:
 | LocationIQ Developer | **$100** |
 | Google Places Text Search | ~**$960** |
 
-At CMS's likely volume, cost is not the deciding factor — **licensing and Japanese POI
+At the host's likely volume, cost is not the deciding factor — **licensing and Japanese POI
 quality are.**
 
 ### Integration complexity and maintenance
@@ -114,7 +114,7 @@ keep running afterwards.
 
 | Provider | Client integration | Server work required | Ongoing maintenance burden |
 |---|---|---|---|
-| **Nominatim** (public) | **Already wired in CMS** — plain GET via axios | None | Low code, **high policy**: the 1 req/s cap cannot be enforced from a browser, so compliance is permanently unverifiable |
+| **Nominatim** (public) | **Already wired in the host** — plain GET via axios | None | Low code, **high policy**: the 1 req/s cap cannot be enforced from a browser, so compliance is permanently unverifiable |
 | **Self-hosted** (Nominatim/Photon/Pelias) | Identical to the above — swap the base URL | **High** — planet import, disk, a rebuild/update pipeline | **The only option with real infra ops.** Ranking tuning for Japanese POI becomes a standing project rather than a one-off |
 | **GSI** | Plain GET, no key; CORS verified direct from the browser | None | **Lowest.** Stable national endpoint, no key to rotate; the undocumented quota is the one unknown |
 | **YOLP** | Plain GET + `appid` | **Proxy required** — not for CORS, but so the key never reaches the browser | Low: one secret to rotate. JP-only, so it is structurally always a *second* provider beside another |
@@ -150,13 +150,13 @@ working untouched (`src/map/baseMaps.ts`).
 | **MapLibre GL JS + vector tiles** | GPU rendering, restyling, smooth zoom, no licence cost for the library | Needs a tile provider (MapTiler/self-hosted); a real migration |
 | **Leaflet** | Smallest, simplest | Weakest geometry editing story; needs plugins for everything |
 | **Mapbox GL JS** | Excellent rendering and tiles | v2+ is proprietary; per-map-load billing |
-| **CesiumJS** | 3D / terrain — what Re:Earth Visualizer uses | Overkill for a 2D Geometry field |
+| **CesiumJS** | 3D / terrain, as 3D viewer products use | Overkill for a 2D Geometry field |
 
 ### 4b. Drawing and geometry editing
 
 | Option | Strengths | Trade-offs |
 |---|---|---|
-| **ol/interaction Draw + Modify + Snap + Translate** *(CMS ships `Draw` only)* | Built in, no extra dependency, mature; vertex-level editing and snapping work out of the box, and `Modify` handles every geometry type including `GeometryCollection` | `Draw` cannot *produce* a `GeometryCollection`; numeric vertex addressing is ours to build. CMS today imports none of `Modify`/`Snap`/`Translate`, so this is new capability |
+| **ol/interaction Draw + Modify + Snap + Translate** *(the host ships `Draw` only)* | Built in, no extra dependency, mature; vertex-level editing and snapping work out of the box, and `Modify` handles every geometry type including `GeometryCollection` | `Draw` cannot *produce* a `GeometryCollection`; numeric vertex addressing is ours to build. the host today imports none of `Modify`/`Snap`/`Translate`, so this is new capability |
 | **Terra Draw** | Renderer-agnostic (MapLibre, Leaflet, ol, Google) | Younger; another dependency to track |
 | **mapbox-gl-draw** | Well-established | Tied to the GL renderer; MultiGeometry support is partial |
 | **Leaflet-Geoman** | Rich UX, good free tier | Leaflet-only; advanced features are paid |
@@ -170,9 +170,9 @@ Fully separable from both of the above — **except for Google**, whose terms co
 to rendering. That coupling is the single most important constraint in this whole
 comparison.
 
-CMS already proves the separation in production: it pairs Nominatim search with OSM tiles
-and ol rendering, three unrelated suppliers, with no coupling between them
-(`GeometryItem/index.tsx:290-347`). Changing the geocoder touches one `useCallback`.
+The host already proves the separation in production: it pairs Nominatim search with OSM tiles
+and ol rendering, three unrelated suppliers, with no coupling between them.
+Changing the geocoder touches one `useCallback`.
 
 ---
 
@@ -193,12 +193,12 @@ choices *inside* our own code, which is worth stating plainly.
 
 **The conclusion is that performance is not a reason to change provider.** The two largest
 costs in the current field are the editor bundle and our own update model; the third is the
-layer rebuild, which is a present defect in CMS rather than a limitation of anything in the
+layer rebuild, which is a present defect in the host rather than a limitation of anything in the
 tables above. Replacing OpenLayers would not move any of them.
 
 ---
 
-## 6. Compatibility with the existing CMS architecture
+## 6. Compatibility with the existing host architecture
 
 The last of the brief's recommendation criteria, and the one that most favours keeping the
 current stack.
@@ -208,12 +208,12 @@ current stack.
 | **`ol` is already a dependency**, used by exactly one component | Keeping it costs nothing new. It also means a renderer swap would touch only that component — real, but it buys nothing (§5) |
 | **Cesium/resium are present but unrelated** — they serve `Asset/Viewers/*` | Not reusable here: 3D globe, different interaction model. There is no "consolidate on one map library" win available |
 | **The field is an antd `Form.Item` child** with `value`/`onChange` injected | The PoC's store must sit *behind* that contract, not replace it. Commit-on-blur/Enter has to reconcile with how antd tracks dirty state |
-| **Validation lifts through an `errorSet`** that rejects form submission | Already the right shape; the PoC's status-bar model should feed it rather than duplicate it |
+| **Validation lifts into the form layer** and rejects submission | Already the right shape; the PoC's status-bar model should feed it rather than duplicate it |
 | **Search is already wired** to a geocoder | Adding the `GeocodeProvider` abstraction is a refactor of existing code, not a greenfield integration |
 | **i18n runs through `useT`** | Provider attribution and error states are translatable strings, not literals — a licence obligation with an i18n cost |
 | **The stored value shape is backend-owned and under redefinition** | Keep conversion in one adapter at the store boundary (report §3.8). This is the only part of the design that should be expected to move |
 
 Nothing in the current architecture resists the unified editor. The one genuine friction
-point is the form contract: the PoC commits eagerly to a module-level store, and CMS
+point is the form contract: the PoC commits eagerly to a module-level store, and the host
 expects a controlled component that reports upward. That is a wiring problem, not a
 design problem.

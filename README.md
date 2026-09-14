@@ -15,13 +15,13 @@ bun dev          # http://localhost:5173
 
 | Document                                                             | Contents                                                                                                                            |
 | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| [`docs/current-implementation.md`](./docs/current-implementation.md) | How CMS edits geometry today, read from the source: data flow, why the two methods are separated, what the current field cannot do  |
+| [`docs/current-implementation.md`](./docs/current-implementation.md) | How a typical host CMS edits geometry today: data flow, why the two methods are separated, what such a field cannot do              |
 | [`docs/report.md`](./docs/report.md)                                 | Blockers and limitations, recommendation, follow-up breakdown, manual verification checklist                                        |
-| [`docs/comparison.md`](./docs/comparison.md)                         | Location-search and map-stack option tables with measured results, plus maintenance, performance and CMS-compatibility criteria     |
+| [`docs/comparison.md`](./docs/comparison.md)                         | Location-search and map-stack option tables with measured results, plus maintenance, performance and host-compatibility criteria     |
 
 **Headline findings:**
 
-1. **The separation is a permission flag, not a technical limit.** CMS already renders both
+1. **The separation is a permission flag, not a technical limit.** The host already renders both
    panes from one component and one value; `isEditor` makes the JSON pane read-only in
    Geometry Editor mode and hides the draw toolbar in Geometry Object mode. Nothing blocks
    unification. Related: the current field imports `Draw` only, so an existing point cannot
@@ -43,6 +43,7 @@ current state are dropped — together these stop the panes rewriting each other
 ```
 src/
   core/       store, GeoJSON validation (zod), geometry helpers
+  cms/        the field's own value shape — one bare geometry, in and out
   editor/     Monaco pane — JSON-only build, schema-driven autocomplete
   form/       the same document as controls — geometry type, vertices, features
   map/        OpenLayers — rendering, diffed sync, Draw/Modify/Translate/Snap

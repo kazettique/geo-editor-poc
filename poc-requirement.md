@@ -1,115 +1,72 @@
-# POC Requirement
+# PoC scope
 
-> **Note.** This document was derived from the fuller research brief and its numbering
-> starts at §2 because **Investigation Area 1 — "Current separation between map and text
-> editing" — was omitted here.** That area is answered separately in
-> [`docs/current-implementation.md`](./docs/current-implementation.md), read from the
-> Re:Earth CMS source rather than from this document.
+What this proof of concept sets out to build, and what it deliberately leaves alone.
 
 ## Brief
 
-A geo editor can edit geojson data and preview it at the same time. It will have geojson editor, map preview and text search section.
+A geo editor that edits GeoJSON data and previews it at the same time, with a GeoJSON
+editor, a map preview and a text-search section.
 
-### Geojson Editor
+### GeoJSON editor
 
-- WHSIWYG editor
-- Syntax highlight for geojson
-- Autocomplete for geojson
+- WYSIWYG editing
+- Syntax highlighting for GeoJSON
+- Autocomplete for GeoJSON
 
-Current usage: monaco editor
+Current choice: Monaco.
 
-### Map Preview
+### Map preview
 
-- Visualize geojson data on the map
-- Dropping or moving a point (or polygon) on the map
+- Visualize GeoJSON data on a map
+- Drop or move a point (or polygon) on the map
 
-Current usage: [OpenLayer](https://www.npmjs.com/package/ol)
+Current choice: [OpenLayers](https://www.npmjs.com/package/ol).
 
-### Text Search
+### Text search
 
-- Address and place-name search.
-- Coverage and accuracy in Japan and internationally.
-- Japanese and multilingual search.
+- Address and place-name search
+- Coverage and accuracy in Japan and internationally
+- Japanese and multilingual search
 
-Current usage: [openstreetmap](https://nominatim.openstreetmap.org/search)
+Current choice: [Nominatim](https://nominatim.openstreetmap.org/search).
 
 ### Other
 
-- Identify any additional limitations for LineString, Polygon, Multi geometries, or GeometryCollection
-- Data editing and map editing should be synced bi-directionally
+- Identify any limitations for LineString, Polygon, Multi\* geometries or GeometryCollection
+- Data editing and map editing stay synchronized bi-directionally
 
-### 2. Location search options
+## Questions to answer
 
-Investigate how CMS could support searching for a location by address or place name and applying the result to a Geometry field.
+**Location search.** How a geometry field could support searching by address or place name
+and applying the result. Worth weighing: search offered by the map provider itself, a
+separate geocoding service, and commercial or open-source alternatives — against address and
+place-name quality, Japanese and international coverage, cost and rate limits, API-key
+handling in a browser, licensing and attribution, integration effort, and whether the search
+service forces the same provider for tiles and rendering.
 
-Evaluate realistic options, including:
+**Map provider suitability.** Whether the current map stack remains the right choice,
+separating three concerns that can be changed independently: rendering and tiles, drawing and
+geometry editing, and address search. The outcome should be a recommendation — keep the
+provider and add a separate search service, keep it but replace the editing layer, replace it
+outright, or use different services for each — reasoned against effort, cost, performance,
+long-term maintenance, and compatibility with the existing architecture.
 
-- Search or geocoding capabilities offered by the current map provider.
-- Using a separate geocoding or place-search service.
-- Relevant commercial and open-source alternatives.
+## Technical validation
 
-The comparison should consider:
+A small, non-production PoC of the recommended approach, focused on a Point geometry,
+validating that:
 
-- Address and place-name search.
-- Coverage and accuracy in Japan and internationally.
-- Japanese and multilingual search.
-- API cost, quotas, and rate limits.
-- API key handling and frontend exposure.
-- Licensing, attribution, and usage restrictions.
-- Integration complexity and maintenance.
-- Whether the search service requires us to use the same provider for map tiles and rendering.
-
-### 3. Suitability of the current map provider
-
-Based on the current use cases, evaluate whether the current map provider and frontend map stack remain the most suitable option.
-
-Distinguish between:
-
-- Map rendering and tiles.
-- Drawing and geometry-editing capabilities.
-- Address and place search.
-
-Changing one of these does not necessarily require replacing the others.
-
-Compare the current solution with realistic alternatives and recommend whether we should:
-
-- Keep the current provider and add a separate search service.
-- Keep the provider but replace or extend the drawing and editing layer.
-- Replace the current provider.
-- Use different services for rendering, editing, and search.
-
-The recommendation should consider:
-
-- Implementation effort.
-- Cost.
-- Performance.
-- Long-term maintenance.
-- Compatibility with the existing CMS architecture.
-
-## Technical Validation
-
-Create a small, non-production PoC for the recommended approach, focused on a Point geometry, to validate that:
-
-- [ ]  An existing point value can be loaded on the map.
-- [ ]  The point can be placed or moved from the map.
-- [ ]  Latitude and longitude can be edited numerically.
-- [ ]  The map and coordinate inputs remain synchronized.
-- [ ]  A location search result can be used to set or update the point.
+- [ ] An existing point value can be loaded on the map.
+- [ ] The point can be placed or moved from the map.
+- [ ] Latitude and longitude can be edited numerically.
+- [ ] The map and coordinate inputs remain synchronized.
+- [ ] A location search result can be used to set or update the point.
 
 The PoC does not need final UI design or production-ready error handling.
 
-## Expected Output
-
-- [ ]  A short explanation of why the current editing methods are separated.
-- [ ]  Identified technical blockers, limitations, and risks.
-- [ ]  A comparison of location-search and map-service options.
-- [ ]  A clear recommendation with reasoning.
-- [ ]  A lightweight PoC or, if blocked, a clear explanation of what prevents it.
-- [ ]  A rough breakdown of the follow-up work needed for production implementation.
-
-## Out of Scope
+## Out of scope
 
 - Production implementation.
 - Final UX or visual design.
-- Migrating existing Geometry Editor and Geometry Object fields.
+- Migrating existing geometry field values.
 - Finalizing support for every GeoJSON geometry type.

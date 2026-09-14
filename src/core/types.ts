@@ -15,6 +15,11 @@ export enum EditOrigin {
    * unrelated fields into a single undo step.
    */
   FORM = "FORM",
+  /**
+   * The field-value block — the stored shape, pasted in or emitted out. Distinct from
+   * TEXT so the header readout says which of the two text surfaces produced a commit.
+   */
+  FIELD = "FIELD",
   SEARCH = "SEARCH",
   /** A jump through the undo/redo stack rather than a fresh edit. */
   HISTORY = "HISTORY",

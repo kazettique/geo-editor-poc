@@ -16,7 +16,7 @@ interface NominatimEntry {
 /**
  * The public endpoint's usage policy caps this at 1 request/second and asks for an
  * identifying User-Agent — which a browser will not let us set, so the request is
- * identified only by Referer. That makes the public instance unsuitable for CMS
+ * identified only by Referer. That makes the public instance unsuitable for
  * production traffic; self-hosting or a paid mirror is the real option.
  */
 export const nominatimProvider: GeocodeProvider = {

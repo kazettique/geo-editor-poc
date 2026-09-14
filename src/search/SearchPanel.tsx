@@ -16,7 +16,7 @@ function describeError(error: unknown): string {
   // fetch rejects with TypeError for network and CORS failures alike — the browser
   // deliberately refuses to tell scripts which, so we have to name both.
   if (error instanceof TypeError) {
-    return "Request blocked — CORS or network. A CMS-side proxy would be required.";
+    return "Request blocked — CORS or network. A server-side proxy would be required.";
   }
   return error instanceof Error ? error.message : "Search failed";
 }

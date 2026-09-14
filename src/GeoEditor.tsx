@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import FieldValuePane from "./field/FieldValuePane";
 import { geoStore } from "./core/geoStore";
 import type { GeoSnapshot } from "./core/types";
 import { useGeoSnapshot } from "./core/useGeoStore";
@@ -14,6 +15,9 @@ function GeoEditor() {
   const snapshot = useGeoSnapshot();
   const [textOpen, setTextOpen] = useState<boolean>(true);
   const [formOpen, setFormOpen] = useState<boolean>(true);
+  // Closed by default: three open blocks would each take a third of the pane, and this one
+  // is a demonstration of the field's shape rather than a daily editing surface.
+  const [fieldOpen, setFieldOpen] = useState<boolean>(false);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
@@ -74,6 +78,15 @@ function GeoEditor() {
               }}
             >
               <GeoForm snapshot={snapshot} />
+            </Collapsible>
+            <Collapsible
+              title="Field value"
+              open={fieldOpen}
+              onToggle={() => {
+                setFieldOpen(!fieldOpen);
+              }}
+            >
+              <FieldValuePane snapshot={snapshot} />
             </Collapsible>
           </div>
         </Pane>

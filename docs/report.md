@@ -3,10 +3,10 @@
 Covers the Expected Output of [`poc-requirement.md`](../poc-requirement.md).
 Option tables live in [comparison.md](./comparison.md).
 
-**Scope note.** This PoC was built standalone, but statements about Re:Earth CMS's *current*
+**Scope note.** This PoC was built standalone, but statements about the existing field's *current*
 Geometry Editor / Geometry Object fields are no longer inferred: they were read from the
-source at commit `5cb0cbf82` and are set out in
-[current-implementation.md](./current-implementation.md), which answers Investigation Area 1
+prior implementation and are set out in
+[current-implementation.md](./current-implementation.md), which covers how that field works
 of the research brief. This report cites that document rather than re-deriving it.
 
 **Backend caveat.** The backend definition for a unified Geometry field is not decided, and
@@ -18,8 +18,8 @@ They are recorded only where the frontend must avoid hard-coding them.
 
 ## 1. Why the editing methods are separated
 
-**In CMS specifically, the separation is two lines of code.** There is one component —
-`Common/Form/GeometryItem/index.tsx` — holding both panes, and one boolean decides which
+**In the existing field, the separation is two lines of code.** There is one component
+holding both panes, and one boolean decides which
 of them may write: `readOnly: disabled || isEditor` makes the JSON pane read-only in
 Geometry **Editor** mode (`:144`), and `isEditor && !disabled` hides the draw toolbar in
 Geometry **Object** mode (`:551`). Text → map rendering already runs in *both* modes. So
@@ -122,7 +122,7 @@ Originally flagged as a blocker, because the geocoder checks ran under Node, whi
 enforce CORS. The guess recorded here was that **GSI was the likelier of the two to need a
 proxy.** That guess was wrong: browser verification on 2026-09-10 returned live results from
 both Nominatim and GSI, so neither is CORS-blocked and neither needs a proxy to be called
-directly from the CMS front end.
+directly from the front end.
 
 Two adjacent concerns are *not* settled by this and stay open:
 
@@ -137,29 +137,29 @@ The error handling is still worth keeping as written: `fetch` rejects with an in
 
 Its usage policy caps traffic at 1 req/s and asks for an identifying `User-Agent` — which
 browsers refuse to let scripts set, so requests are identified only by `Referer`. Using it
-for CMS production traffic would breach the policy regardless of volume.
+for production traffic would breach the policy regardless of volume.
 
-**This is a present exposure, not a future one.** CMS already calls
+**This is a present exposure, not a future one.** The existing field already calls
 `https://nominatim.openstreetmap.org/search` directly from the browser
-(`GeometryItem/index.tsx:332`). The risk is therefore already taken; what the
+directly from the browser. The risk is therefore already taken; what the
 recommendation in §4 changes is that it stops being taken.
 
 ### 3.4 Geometry-type limitations
 
-The table below describes **this PoC**. For contrast, CMS today has no map-side editing of
+The table below describes **this PoC**. For contrast, the existing field has no map-side editing of
 existing geometry at all: it imports `Draw` and nothing else — no `Modify`, `Translate`,
 `Select` or `Snap` — so a placed geometry can only be replaced by drawing a new one, behind
 a "this will replace the previously entered value" confirm
 ([current-implementation.md](./current-implementation.md) §4.1). Everything in the "Map
 editing" column is therefore new capability, not capability to preserve.
 
-| Type                                        | Renders | Map editing | Numeric editing                             |
-| ------------------------------------------- | ------- | ----------- | ------------------------------------------- |
-| Point                                       | Yes     | Yes         | Yes                                         |
-| LineString                                  | Yes     | Yes         | Yes, per vertex                             |
-| Polygon                                     | Yes     | Yes         | Yes, per vertex, ring closure maintained    |
+| Type                                        | Renders | Map editing | Numeric editing                                                                  |
+| ------------------------------------------- | ------- | ----------- | -------------------------------------------------------------------------------- |
+| Point                                       | Yes     | Yes         | Yes                                                                              |
+| LineString                                  | Yes     | Yes         | Yes, per vertex                                                                  |
+| Polygon                                     | Yes     | Yes         | Yes, per vertex, ring closure maintained                                         |
 | MultiPoint / MultiLineString / MultiPolygon | Yes     | Yes         | **Not directly** — surfaced as non-editable, but convertible to an editable kind |
-| GeometryCollection                          | Yes     | Yes         | **Not directly** — same escape hatch        |
+| GeometryCollection                          | Yes     | Yes         | **Not directly** — same escape hatch                                             |
 
 Details worth carrying forward:
 
@@ -170,7 +170,6 @@ Details worth carrying forward:
   `ol/format/GeoJSON.js:353,546` read and write one. `commitFeatures`
   (`useMapInteractions.ts:33-42`) writes back whatever geometry comes out, so all of these
   types are vertex-draggable on the map today.
-
   An earlier draft of this report stated that ol's `Modify` had no `GeometryCollection`
   support. That was wrong, and it inflated the estimate in §5.
 - **What is actually missing is the numeric layer.** `GeoUtils.listVertices` returns `[]` for
@@ -205,6 +204,10 @@ by array index, which breaks on reorder.
 consequence of the PoC holding a `FeatureCollection`; a single-geometry value has nothing
 to diff and needs no ids (see §3.8).
 
+This is now demonstrable rather than predicted: the "Field value" block emits a value that
+contains no `id` and no `properties` at all, and pasting one back in mints a fresh `f1`. The
+ids exist only between the store and the map, and never reach the field.
+
 ### 3.6 Concurrent-edit conflicts need a real answer
 
 If the map changes while the user is mid-keystroke, silently overwriting destroys their
@@ -220,29 +223,69 @@ during a drag. Same merge story, more surface.
 
 ### 3.7 monaco 0.56 API breaks
 
-Two changes that will bite anywhere in CMS: `monaco.languages.json` is now a deprecation
+Two changes that will bite any host: `monaco.languages.json` is now a deprecation
 stub (use the top-level `json` namespace), and the old `monaco-editor/esm/vs/...` worker
 specifiers no longer resolve because 0.56 ships an exports map rewriting `./*` to
 `./esm/vs/*.js`.
 
-### 3.8 The PoC's value shape does not match the field's — keep the adapter thin
+### 3.8 The PoC's value shape does not match the field's — the adapter now exists
 
-This PoC's store holds a `FeatureCollection` of many features. The CMS field today holds a
-**single bare GeoJSON geometry** serialized to a string, with repeated values carried as
-`string[]` — one geometry per entry, so a "multiple" Point field is N Points, not a
-MultiPoint ([current-implementation.md](./current-implementation.md) §2).
+This PoC's store holds a `FeatureCollection` of many features. The existing field holds a
+**single bare GeoJSON geometry** serialized to a string. Established by reading the prior
+implementation rather than inferred: the stored value's type is a JSON string, and
+server-side validation switches on that value's `type`, accepting the seven geometry types
+and rejecting everything else — so `Feature` and `FeatureCollection` are refused outright.
 
-The backend definition is undecided and this shape may change, which is the point: **the
-sync machinery must not assume either shape.** The origin/revision model, the 7-decimal
-rounding and the no-op suppression are all independent of the envelope, and the conversion
-should sit in one adapter at the store boundary rather than being spread through the panes.
-Written that way, a backend change is a one-file change.
+`FeatureCollection` does appear, but only as an I/O envelope: bulk import unwraps each
+`Feature.geometry` back to a bare string, and GeoJSON export re-wraps bare geometries at
+serialization time. No production path stores one as a field value.
+
+**One editor instance carries one value.** A repeated field is not one value holding several
+geometries — it renders one editor per array entry, each with its own map. Multiplicity lives
+*above* the editor.
+
+The adapter is now real: [`src/field/FieldValue.ts`](../src/field/FieldValue.ts), with a live
+read/write surface in `FieldValuePane.tsx` (the "Field value" block in the GeoJSON pane).
+`src/core/` imports nothing from `src/field/` — a grep over `core/` and every pane directory
+returns no hits, which is the mechanical proof that the sync engine does not know the field
+shape exists. A change in the stored envelope is a change to that one file.
+
+**What a round trip preserves.** Two distinct round trips, and conflating them is where the
+confusion lives:
+
+| Round trip                                                                                     | Coordinate precision                             |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `write(read(v))` — the adapter alone                                                           | **lossless**, byte-identical for all seven kinds |
+| `write(normalize(read(v)))` — the real path, since everything entering the store is normalized | rounded to 7 dp                                  |
+
+So the guarantee is **idempotence, not identity**: one pass may round, and every pass after
+is stable. Measured worst-case error over 200 random 12-decimal positions is `5.0e-8°`,
+which is half the 1e-7 grid step — about 5.6 mm, not the ~1 cm that
+`GeoUtils.COORDINATE_PRECISION`'s comment implies (1 cm is the grid spacing; the error is
+half of it).
+
+The stronger and more useful property: **a round trip produces zero revisions.** Re-reading
+an emitted value trips the store's own `isEqual` no-op suppression, so it cannot start an
+echo loop between the field and the panes. Verified against a real `createGeoStore`.
+
+**Two pre-existing gaps the adapter inherits and deliberately does not repair:** RFC 7946
+foreign members such as `bbox` are stripped, because `geometrySchema` is built from
+`z.object`; and an unclosed polygon ring passes through unchanged, because the schema only
+checks `min(4)`. Both are shared with the text pane through `GeoUtils.parse`, so fixing
+either means editing `geoSchema.ts` and silently changing Monaco's behaviour too. They are
+pinned by checks so they are not rediscovered later as bugs. An adapter that quietly mutates
+data is worse than one that faithfully carries a known defect.
+
+**Consequence for a host:** because the store path is not identity, merely *opening* a
+high-precision value dirties the field — the round trip differs from the stored string with
+no user edit. Dirty-tracking must baseline on `write(normalize(read(v)))` at load time,
+not on `v`. See §5.
 
 ### 3.9 The current field rebuilds its map layer on every value change
 
 `sketch()` removes every layer above index 0 and constructs a fresh `VectorSource`,
 `VectorLayer` and `Style` each time the value changes — in Geometry Object mode, on every
-keystroke (`GeometryItem/index.tsx:426-466`). Two consequences worth carrying forward:
+keystroke. Two consequences worth carrying forward:
 
 - **It is the structural reason `Modify` cannot simply be added to the current code.** An
   interaction bound to the source would be discarded on the next character typed. A
@@ -303,9 +346,9 @@ Mapped to the requirement's four options, this is *"keep the current provider an
 separate search service"*, with the nuance that search should be **two providers, not one**.
 
 One correction to the framing: **search is not a new integration, it is an existing one to
-redirect.** CMS already has a search box wired to Nominatim — it just calls
+redirect.** The existing field already has a search box wired to Nominatim — it just calls
 `view.animate()` and never writes the value, so the user still has to draw manually on the
-newly centred map (`GeometryItem/index.tsx:328-347`). The missing piece the brief asks for,
+newly centred map. The missing piece the requirement asks for,
 *"applying the result to a Geometry field"*, is the write. Two further things the existing
 integration lacks: it uses only `data[0]` and discards the rest, so there is no result list
 to choose from, and failures are `console.error` only.
@@ -331,7 +374,7 @@ licence compatibility:
 - **Google** has the best Japanese POI data and is **ruled out by licensing.** Its terms
   forbid using Content alongside a non-Google map (§10.5(5), §10.4(d)), so adopting it for
   search forces adopting it for rendering, and its 30-day caching cap conflicts with
-  storing a coordinate in a CMS field.
+  storing a coordinate in a field.
 - **Everything OSM-derived** — Nominatim, MapTiler, LocationIQ, Photon, Pelias — inherits
   the same Japanese POI weakness, because it is a data problem rather than an engine one.
 - **GSI** is excellent and free for Japanese addresses and useless for place names.
@@ -362,7 +405,7 @@ Rough breakdown, assuming the recommendation above.
 
 **Decide first (blocking, ~1 week)**
 
-- Legal review of Yahoo! YOLP commercial terms, and of GSI's 利用規約 for CMS use.
+- Legal review of Yahoo! YOLP commercial terms, and of GSI's 利用規約 for production use.
 - Confirm CORS behaviour of YOLP from a browser; decide proxy vs direct. GSI and Nominatim
   are already settled — both were verified working direct from the browser (§3.2).
 - Editor decision: lazy-loaded Monaco vs CodeMirror 6. Prototype CodeMirror to compare
@@ -370,16 +413,26 @@ Rough breakdown, assuming the recommendation above.
 
 **Core field implementation (~3–4 weeks)**
 
-- Port the store, origin/revision sync and rounding into CMS's field architecture.
-- Wire to CMS's form state, validation and dirty-tracking; reconcile the "commit on
-  blur/Enter" model with how CMS saves fields. The field is an antd `Form.Item` child with
-  `value`/`onChange` injected, and errors are lifted through an `errorSet` that rejects
+- Port the store, origin/revision sync and rounding into the host's field architecture.
+- Wire to the host's form state, validation and dirty-tracking; reconcile the "commit on
+  blur/Enter" model with how it saves fields. The field is an antd `Form.Item` child with
+  `value`/`onChange` injected, and errors are lifted into the form layer, which rejects
   submission — both already work and should be kept.
 - **Map-side editing is new work.** `Modify`, `Translate` and `Snap` do not exist in the
   current field (§3.4), and the diffed layer update has to replace `sketch()`'s
   teardown-and-rebuild before any of them can stay bound (§3.9).
 - Keep the value-shape conversion in a single adapter at the store boundary (§3.8) — the
-  backend definition is still open, so this is the part most likely to move.
+  backend definition is still open, so this is the part most likely to move. The PoC now has
+  one (`src/field/FieldValue.ts`); porting it is mostly deciding what the host does with its
+  issues.
+- **Baseline dirty-tracking on `write(normalize(read(v)))`, not on `v`.** Opening a value
+  whose coordinates exceed 7 decimals rewrites it on load, so a naive comparison marks every
+  such field dirty the moment it is viewed (§3.8).
+- **A repeated field means N editor instances, not one editor holding N geometries** — the
+  existing field already works this way. This PoC cannot
+  demonstrate it because `geoStore` is a module singleton that every pane imports directly;
+  that is the concrete reason behind the "field-local state rather than a module singleton"
+  item below, not a separate task.
 - Selection and focus as field-local state rather than a module singleton.
 - Accessibility: keyboard-only vertex editing, focus order, screen-reader labels — all
   absent from this PoC.
@@ -457,7 +510,7 @@ not the code.
 9. **Apply** ✅ — click a result with a Point selected (updates it) and with nothing selected
    (adds one). The map recentres either way. Note that with a **Line or Polygon** selected it
    adds a new Point rather than doing nothing (`src/search/SearchPanel.tsx:72`); the panel
-   footer says so, but confirm it is the behaviour CMS wants.
+   footer says so, but confirm it is the behaviour a host would want.
 10. **Non-editable types** ✅ — paste the payload below, **then click the shape on the map.**
     The inspector should read `mpoly · MultiPolygon renders but is not numerically editable`.
 
@@ -511,50 +564,74 @@ Added with the form editor (§3.10). **Not yet walked in a browser**; steps 1-11
 The geometry and store layers underneath them are covered by 102 scratch checks (82 on the
 geometry helpers, 20 on store semantics), which are again uncommitted — same §5 Hardening item.
 
-12. **Both blocks open** — the GeoJSON pane splits into a Text block and a Form block, both
+1. **Both blocks open** — the GeoJSON pane splits into a Text block and a Form block, both
     expanded, with the seeded `f1` card showing one `Coordinate` row.
-13. **Collapse round-trip — the Monaco test.** Type a broken brace so the status bar turns
+2. **Collapse round-trip — the Monaco test.** Type a broken brace so the status bar turns
     red, collapse Text, re-expand. **The broken text, the red bar, the caret and the scroll
     position must all still be there.** They are only preserved because the block is hidden
     rather than unmounted: `@monaco-editor/react` disposes the model on unmount, and
     `JsonEditor`'s cleanup clears a pending 300 ms commit, so an edit typed just before
     collapsing would be silently lost.
-14. **Form → map → text** — edit a longitude, press Enter: the marker moves and the JSON
+3. **Form → map → text** — edit a longitude, press Enter: the marker moves and the JSON
     follows at 7 decimals. Esc mid-edit reverts the field without committing.
-15. **Type conversion, lossless** — set `f1` to LineString (2 rows, no confirm), then Polygon
+4. **Type conversion, lossless** — set `f1` to LineString (2 rows, no confirm), then Polygon
     (3 rows, no confirm), then back to LineString (all vertices kept, no confirm).
-16. **Type conversion, lossy** — with the Polygon selected choose Point. The confirm names
+5. **Type conversion, lossy** — with the Polygon selected choose Point. The confirm names
     the discarded count. **Cancel: the select must snap back to Polygon** and the map must not
     move. Accept: one row remains, and a single ⌘Z restores the whole polygon.
-17. **Ring-aware insert and remove** — on a Polygon, `+` on the **last** row inserts the
+6. **Ring-aware insert and remove** — on a Polygon, `+` on the **last** row inserts the
     midpoint between it and vertex 1; check the JSON shows the ring still closed. Remove rows
     until `✕` disables at 3 vertices. Then edit Vertex 1's latitude and confirm the closing
     position tracks it.
-18. **Undo granularity** — add a vertex, convert the type, add a feature: three ⌘Z presses,
+7. **Undo granularity** — add a vertex, convert the type, add a feature: three ⌘Z presses,
     each undoing exactly one action (focus must be outside an input). Then edit two different
     coordinate fields within half a second and confirm they are **two** undo steps, not one —
     that is what `EditOrigin.FORM` buys over `NUMERIC`. Finally, focus a coordinate input,
     type, and press ⌘Z: only the text undoes, the map does not move.
-19. **Non-editable types and the cap** — re-paste the step 10 payload. The `mpoly` card shows
+8. **Non-editable types and the cap** — re-paste the step 10 payload. The `mpoly` card shows
     the non-editable hint with its position count, and its type select shows `MultiPolygon` as
     a **disabled** option alongside the three editable targets; picking Polygon warns first.
     Then paste a polygon with over 200 vertices and confirm the card renders 200 rows plus the
     "Showing 200 of N" notice, and that the pane stays responsive.
-20. **Off-screen select** — pan until the seeded feature is out of view, then click its card.
+9. **Off-screen select** — pan until the seeded feature is out of view, then click its card.
     The map pans to it. Click the same card again: nothing moves, because it is now visible.
-21. **On-screen select** — with two features both visible, click between their cards. The
+10. **On-screen select** — with two features both visible, click between their cards. The
     highlight moves and **the map does not pan at all.**
-22. **Explicit centre still works** — click the feature **id** on a feature that is already
+11. **Explicit centre still works** — click the feature **id** on a feature that is already
     visible. The map centres and zooms to at least `DEFAULT_ZOOM`. This is the only control
     that moves the map for something already on screen.
-23. **Map → form** — add enough features to overflow the form's scroll container, scroll to
+12. **Map → form** — add enough features to overflow the form's scroll container, scroll to
     the top, then click the last feature's shape on the map. Its card scrolls into view and
     highlights. Then click a shape whose card is already visible: the form must not scroll.
-24. **Search unchanged** — re-run step 9. The map must still recentre on an applied result
+13. **Search unchanged** — re-run step 9. The map must still recentre on an applied result
     **even when the target is already on screen.** If it does not, `FocusMode` is defaulting
     wrongly and the regression is in `geoStore.focus`, not in the form.
-25. **Delete does not dangle** — click a card, then its `✕`. The header's `sel` readout must
+14. **Delete does not dangle** — click a card, then its `✕`. The header's `sel` readout must
     show `—` rather than the id of the feature that was just removed.
+
+### Field value block — steps 26-31
+
+Added with the value-shape adapter (§3.8). **Not yet walked in a browser.** The adapter and
+its round-trip properties are covered by 49 scratch checks.
+
+1. **Emission** — expand the "Field value" block. With the seeded feature it reads exactly
+    `{"type":"Point","coordinates":[139.767125,35.681236]}` — one line, no `"id"`, no
+    `"properties"`, and **no 東京駅**. That absence is the point: the name lives in the store
+    and has nowhere to live in a field value.
+2. **Live, and history-aware** — drag the point on the map; the string updates in step with
+    the JSON above it, at 7 decimals. Press ⌘Z; the block follows history like every other
+    pane, and the header origin reads `FIELD` only when the edit came from this block.
+3. **Inbound** — replace the contents with `{"type":"Point","coordinates":[139.7,35.7]}` and
+    blur. Map, Monaco and form all move to it, and Monaco shows a freshly minted `f1`.
+4. **Rejection** — paste a whole `FeatureCollection` and blur. It is refused with *"A field
+    value is a bare geometry"*, and **`rev` in the header does not move** — nothing entered the
+    store. Press Esc to revert. Then paste a JSON array: refused as a repeated field's value,
+    whose entries belong to their own editors.
+5. **Overflow** — draw a second shape on the map. The block still shows the **first** geometry
+    and an amber notice reports that one further geometry cannot be represented. This is the
+    PoC's `FeatureCollection` exceeding what a field value can hold, shown rather than hidden.
+6. **Idempotence** — paste `{"type":"Point","coordinates":[139.767125123456,35.681236123456]}`.
+    It commits rounded to 7 decimals; re-blurring does not change it again.
 
 ```bash
 bun run build    # tsc -b + vite build
