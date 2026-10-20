@@ -6,9 +6,12 @@ bi-directionally in sync.
 
 Built against [`poc-requirement.md`](./poc-requirement.md).
 
+Live demo: <https://kazettique.github.io/geo-editor-poc/> (deployed from `main` by
+[`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml)).
+
 ```bash
 bun install
-bun dev          # http://localhost:5173
+bun dev          # http://localhost:5173/geo-editor-poc/
 ```
 
 ## Deliverables
