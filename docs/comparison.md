@@ -15,12 +15,12 @@ Two kinds of claim appear below:
 Both free providers were queried live through the PoC's own provider code
 (`src/search/providers/`). Verbatim top results:
 
-| Query | GSI 地理院 AddressSearch | Nominatim (public) |
-|---|---|---|
-| `東京都千代田区丸の内一丁目` | **`東京都千代田区丸の内一丁目`** — 1 exact hit, `[139.767197, 35.681561]` | not tested |
-| `東京駅` | `北海道札幌市東区` — matched the 東 character | `東京駅;総武地下2番線` `[highway / footway]` |
-| `Tokyo Station` | not applicable | `東京駅(改札外)` `[highway / footway]` |
-| `Berlin Hauptbahnhof` | not applicable | **`Berlin Hauptbahnhof`** `[building / train_station]` ✓ |
+| Query                        | GSI 地理院 AddressSearch                                                  | Nominatim (public)                                       |
+| ---------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `東京都千代田区丸の内一丁目` | **`東京都千代田区丸の内一丁目`** — 1 exact hit, `[139.767197, 35.681561]` | not tested                                               |
+| `東京駅`                     | `北海道札幌市東区` — matched the 東 character                             | `東京駅;総武地下2番線` `[highway / footway]`             |
+| `Tokyo Station`              | not applicable                                                            | `東京駅(改札外)` `[highway / footway]`                   |
+| `Berlin Hauptbahnhof`        | not applicable                                                            | **`Berlin Hauptbahnhof`** `[building / train_station]` ✓ |
 
 Two conclusions, and the second is the one that drives the recommendation:
 
@@ -41,16 +41,16 @@ Two conclusions, and the second is the one that drives the recommendation:
 
 ## 2. Location search options — capability
 
-| Provider | Address search | Place / POI search | Japan accuracy | International | Japanese + multilingual |
-|---|---|---|---|---|---|
-| **Nominatim** (public OSM) | Fair | Poor in JP *(measured)* | Weak for POI, fair for address | Good *(measured)* | Yes — `accept-language`, returned ベルリン中央駅 |
-| **Nominatim / Photon / Pelias** (self-hosted) | Fair | Same data, tunable ranking | Improvable with custom weighting | Good | Yes |
-| **GSI 地理院** AddressSearch | **Excellent** *(measured)* | **Unusable** *(measured)* | Authoritative — national mapping agency | None (JP only) | Japanese only |
-| **Yahoo! JAPAN YOLP** ローカルサーチ | Good | **Strong in JP** — phone-directory + business data | Built for Japan | None (JP only) | Japanese only |
-| **Google Places** | Excellent | Excellent | Excellent | Excellent | Yes |
-| **Mapbox Geocoding** | Good | Good | Moderate in JP | Excellent | Yes |
-| **MapTiler Geocoding** | Good | Moderate | OSM-derived — same JP weakness | Good | Yes |
-| **LocationIQ** | Good | Moderate | OSM/Nominatim-derived — same JP weakness | Good | Yes |
+| Provider                                      | Address search             | Place / POI search                                 | Japan accuracy                           | International     | Japanese + multilingual                          |
+| --------------------------------------------- | -------------------------- | -------------------------------------------------- | ---------------------------------------- | ----------------- | ------------------------------------------------ |
+| **Nominatim** (public OSM)                    | Fair                       | Poor in JP *(measured)*                            | Weak for POI, fair for address           | Good *(measured)* | Yes — `accept-language`, returned ベルリン中央駅 |
+| **Nominatim / Photon / Pelias** (self-hosted) | Fair                       | Same data, tunable ranking                         | Improvable with custom weighting         | Good              | Yes                                              |
+| **GSI 地理院** AddressSearch                  | **Excellent** *(measured)* | **Unusable** *(measured)*                          | Authoritative — national mapping agency  | None (JP only)    | Japanese only                                    |
+| **Yahoo! JAPAN YOLP** ローカルサーチ          | Good                       | **Strong in JP** — phone-directory + business data | Built for Japan                          | None (JP only)    | Japanese only                                    |
+| **Google Places**                             | Excellent                  | Excellent                                          | Excellent                                | Excellent         | Yes                                              |
+| **Mapbox Geocoding**                          | Good                       | Good                                               | Moderate in JP                           | Excellent         | Yes                                              |
+| **MapTiler Geocoding**                        | Good                       | Moderate                                           | OSM-derived — same JP weakness           | Good              | Yes                                              |
+| **LocationIQ**                                | Good                       | Moderate                                           | OSM/Nominatim-derived — same JP weakness | Good              | Yes                                              |
 
 Note the pattern: everything OSM-derived (Nominatim, MapTiler, LocationIQ, Photon,
 Pelias) inherits the same Japanese POI weakness, because it is a *data* problem, not an
@@ -58,16 +58,16 @@ engine problem. Only Google and YOLP use independent Japanese POI corpora.
 
 ## 3. Location search options — commercial and operational
 
-| Provider | Cost | Quota / rate limit | Key exposure | Licence & attribution | Ties you to their tiles? |
-|---|---|---|---|---|---|
-| **Nominatim** (public) | Free | **1 req/s**; no bulk; production use discouraged | No key | ODbL — attribution required | No |
-| **Self-hosted** (Nominatim/Photon/Pelias) | Infra only (~planet import is heavy) | Yours | None — server-side | ODbL | No |
-| **GSI** | Free | No published quota | No key | 国土地理院 attribution; check 利用規約 for commercial terms | No |
-| **YOLP** | Free | **50,000 req/day per app** | `appid` in browser → exposed; needs a proxy or referrer lock | Yahoo! JAPAN terms; commercial use has separate guidelines — **needs legal review** | No |
-| **Google Places** | Text Search Essentials **$32/1k** (10k/mo free); Autocomplete **$2.83/1k**; Geocoding **$5/1k** (10k/mo free) | Generous | Key in browser; restrict by HTTP referrer | **Blocking — see below** | **Yes, effectively** |
-| **Mapbox Geocoding** | Temporary: free to **100k/mo**, then $0.75/1k. Permanent: **$5/1k**, no free tier | Generous | Public token, URL-restricted | Attribution required | No — geocoding is separable |
-| **MapTiler** | Free 1k sessions/mo; Flex $30/mo incl. 3k, then $2.50/1k | Session-based | Key in browser, domain-locked | Logo required on free tier | No |
-| **LocationIQ** | Free 5k/day @ 2 req/s; Developer $100/mo 25k/day @ 20 req/s | Clear tiers | Key in browser | Attribution on free tier | No |
+| Provider                                  | Cost                                                                                                          | Quota / rate limit                               | Key exposure                                                 | Licence & attribution                                                               | Ties you to their tiles?    |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------ | ----------------------------------------------------------------------------------- | --------------------------- |
+| **Nominatim** (public)                    | Free                                                                                                          | **1 req/s**; no bulk; production use discouraged | No key                                                       | ODbL — attribution required                                                         | No                          |
+| **Self-hosted** (Nominatim/Photon/Pelias) | Infra only (~planet import is heavy)                                                                          | Yours                                            | None — server-side                                           | ODbL                                                                                | No                          |
+| **GSI**                                   | Free                                                                                                          | No published quota                               | No key                                                       | 国土地理院 attribution; check 利用規約 for commercial terms                         | No                          |
+| **YOLP**                                  | Free                                                                                                          | **50,000 req/day per app**                       | `appid` in browser → exposed; needs a proxy or referrer lock | Yahoo! JAPAN terms; commercial use has separate guidelines — **needs legal review** | No                          |
+| **Google Places**                         | Text Search Essentials **$32/1k** (10k/mo free); Autocomplete **$2.83/1k**; Geocoding **$5/1k** (10k/mo free) | Generous                                         | Key in browser; restrict by HTTP referrer                    | **Blocking — see below**                                                            | **Yes, effectively**        |
+| **Mapbox Geocoding**                      | Temporary: free to **100k/mo**, then $0.75/1k. Permanent: **$5/1k**, no free tier                             | Generous                                         | Public token, URL-restricted                                 | Attribution required                                                                | No — geocoding is separable |
+| **MapTiler**                              | Free 1k sessions/mo; Flex $30/mo incl. 3k, then $2.50/1k                                                      | Session-based                                    | Key in browser, domain-locked                                | Logo required on free tier                                                          | No                          |
+| **LocationIQ**                            | Free 5k/day @ 2 req/s; Developer $100/mo 25k/day @ 20 req/s                                                   | Clear tiers                                      | Key in browser                                               | Attribution on free tier                                                            | No                          |
 
 ### The Google blocker
 
@@ -93,15 +93,15 @@ recommendation.
 Assuming 50 editors × 20 searches/day × 20 working days, and ~2 requests per search
 after 400 ms debouncing ≈ **40,000 requests/month**:
 
-| Provider | Monthly cost at 40k |
-|---|---|
-| GSI | ¥0 |
-| YOLP | ¥0 (well inside 50k/**day**) |
-| Nominatim self-hosted | Infra only |
-| Mapbox (temporary) | $0 — inside the 100k free tier |
-| MapTiler Flex | $30 + ~$92 overage ≈ **$122** |
-| LocationIQ Developer | **$100** |
-| Google Places Text Search | ~**$960** |
+| Provider                  | Monthly cost at 40k            |
+| ------------------------- | ------------------------------ |
+| GSI                       | ¥0                             |
+| YOLP                      | ¥0 (well inside 50k/**day**)   |
+| Nominatim self-hosted     | Infra only                     |
+| Mapbox (temporary)        | $0 — inside the 100k free tier |
+| MapTiler Flex             | $30 + ~$92 overage ≈ **$122**  |
+| LocationIQ Developer      | **$100**                       |
+| Google Places Text Search | ~**$960**                      |
 
 At the host's likely volume, cost is not the deciding factor — **licensing and Japanese POI
 quality are.**
@@ -112,16 +112,16 @@ The brief asks for this axis explicitly. The useful distinction is not how hard 
 call is — every option here is an HTTP GET returning JSON — but what each one obliges us to
 keep running afterwards.
 
-| Provider | Client integration | Server work required | Ongoing maintenance burden |
-|---|---|---|---|
-| **Nominatim** (public) | **Already wired in the host** — plain GET via axios | None | Low code, **high policy**: the 1 req/s cap cannot be enforced from a browser, so compliance is permanently unverifiable |
-| **Self-hosted** (Nominatim/Photon/Pelias) | Identical to the above — swap the base URL | **High** — planet import, disk, a rebuild/update pipeline | **The only option with real infra ops.** Ranking tuning for Japanese POI becomes a standing project rather than a one-off |
-| **GSI** | Plain GET, no key; CORS verified direct from the browser | None | **Lowest.** Stable national endpoint, no key to rotate; the undocumented quota is the one unknown |
-| **YOLP** | Plain GET + `appid` | **Proxy required** — not for CORS, but so the key never reaches the browser | Low: one secret to rotate. JP-only, so it is structurally always a *second* provider beside another |
-| **Google Places** | SDK or REST; referrer-restricted key | None strictly, but the 30-day caching cap means deliberately *not* persisting results | **Highest, and it is licence work, not code.** Adopting it drags the renderer along with it |
-| **Mapbox Geocoding** | Plain REST, URL-restricted public token | None | Low: token rotation and attribution. The temporary-vs-permanent endpoint split is a compliance detail that must be got right per call |
-| **MapTiler** | Plain REST, domain-locked key | None | Low; logo requirement on the free tier is a UI obligation |
-| **LocationIQ** | Plain REST, key in browser | Proxy advisable | Low |
+| Provider                                  | Client integration                                       | Server work required                                                                  | Ongoing maintenance burden                                                                                                            |
+| ----------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **Nominatim** (public)                    | **Already wired in the host** — plain GET via axios      | None                                                                                  | Low code, **high policy**: the 1 req/s cap cannot be enforced from a browser, so compliance is permanently unverifiable               |
+| **Self-hosted** (Nominatim/Photon/Pelias) | Identical to the above — swap the base URL               | **High** — planet import, disk, a rebuild/update pipeline                             | **The only option with real infra ops.** Ranking tuning for Japanese POI becomes a standing project rather than a one-off             |
+| **GSI**                                   | Plain GET, no key; CORS verified direct from the browser | None                                                                                  | **Lowest.** Stable national endpoint, no key to rotate; the undocumented quota is the one unknown                                     |
+| **YOLP**                                  | Plain GET + `appid`                                      | **Proxy required** — not for CORS, but so the key never reaches the browser           | Low: one secret to rotate. JP-only, so it is structurally always a *second* provider beside another                                   |
+| **Google Places**                         | SDK or REST; referrer-restricted key                     | None strictly, but the 30-day caching cap means deliberately *not* persisting results | **Highest, and it is licence work, not code.** Adopting it drags the renderer along with it                                           |
+| **Mapbox Geocoding**                      | Plain REST, URL-restricted public token                  | None                                                                                  | Low: token rotation and attribution. The temporary-vs-permanent endpoint split is a compliance detail that must be got right per call |
+| **MapTiler**                              | Plain REST, domain-locked key                            | None                                                                                  | Low; logo requirement on the free tier is a UI obligation                                                                             |
+| **LocationIQ**                            | Plain REST, key in browser                               | Proxy advisable                                                                       | Low                                                                                                                                   |
 
 Two conclusions:
 
@@ -144,22 +144,22 @@ working untouched (`src/map/baseMaps.ts`).
 
 ### 4a. Rendering and tiles
 
-| Option | Strengths | Trade-offs |
-|---|---|---|
-| **OpenLayers + OSM/GSI raster** *(current)* | No key, no vendor account, GSI tiles are free and authoritative for Japan | Raster tiles — no runtime restyling, heavier at high zoom |
-| **MapLibre GL JS + vector tiles** | GPU rendering, restyling, smooth zoom, no licence cost for the library | Needs a tile provider (MapTiler/self-hosted); a real migration |
-| **Leaflet** | Smallest, simplest | Weakest geometry editing story; needs plugins for everything |
-| **Mapbox GL JS** | Excellent rendering and tiles | v2+ is proprietary; per-map-load billing |
-| **CesiumJS** | 3D / terrain, as 3D viewer products use | Overkill for a 2D Geometry field |
+| Option                                      | Strengths                                                                 | Trade-offs                                                     |
+| ------------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| **OpenLayers + OSM/GSI raster** *(current)* | No key, no vendor account, GSI tiles are free and authoritative for Japan | Raster tiles — no runtime restyling, heavier at high zoom      |
+| **MapLibre GL JS + vector tiles**           | GPU rendering, restyling, smooth zoom, no licence cost for the library    | Needs a tile provider (MapTiler/self-hosted); a real migration |
+| **Leaflet**                                 | Smallest, simplest                                                        | Weakest geometry editing story; needs plugins for everything   |
+| **Mapbox GL JS**                            | Excellent rendering and tiles                                             | v2+ is proprietary; per-map-load billing                       |
+| **CesiumJS**                                | 3D / terrain, as 3D viewer products use                                   | Overkill for a 2D Geometry field                               |
 
 ### 4b. Drawing and geometry editing
 
-| Option | Strengths | Trade-offs |
-|---|---|---|
+| Option                                                                             | Strengths                                                                                                                                                             | Trade-offs                                                                                                                                                                        |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **ol/interaction Draw + Modify + Snap + Translate** *(the host ships `Draw` only)* | Built in, no extra dependency, mature; vertex-level editing and snapping work out of the box, and `Modify` handles every geometry type including `GeometryCollection` | `Draw` cannot *produce* a `GeometryCollection`; numeric vertex addressing is ours to build. the host today imports none of `Modify`/`Snap`/`Translate`, so this is new capability |
-| **Terra Draw** | Renderer-agnostic (MapLibre, Leaflet, ol, Google) | Younger; another dependency to track |
-| **mapbox-gl-draw** | Well-established | Tied to the GL renderer; MultiGeometry support is partial |
-| **Leaflet-Geoman** | Rich UX, good free tier | Leaflet-only; advanced features are paid |
+| **Terra Draw**                                                                     | Renderer-agnostic (MapLibre, Leaflet, ol, Google)                                                                                                                     | Younger; another dependency to track                                                                                                                                              |
+| **mapbox-gl-draw**                                                                 | Well-established                                                                                                                                                      | Tied to the GL renderer; MultiGeometry support is partial                                                                                                                         |
+| **Leaflet-Geoman**                                                                 | Rich UX, good free tier                                                                                                                                               | Leaflet-only; advanced features are paid                                                                                                                                          |
 
 OpenLayers' editing layer is the strongest part of the current stack and the weakest
 reason to leave it.
@@ -182,14 +182,14 @@ The brief lists performance as a recommendation criterion. Measured against the 
 above, it does not discriminate between them — but it does discriminate sharply between
 choices *inside* our own code, which is worth stating plainly.
 
-| Cost centre | Magnitude | Whose choice |
-|---|---|---|
-| **Geocoding round-trip** | Network-bound, ~100–400 ms for every option | Nobody's — identical across providers |
-| **Raster vs vector tiles** | Raster is heavier at high zoom and cannot restyle at runtime | Provider's, but immaterial for a small fixed-style form-field map |
-| **Map library weight** | ol ≈ 330 kB raw / 96 kB gzip | Provider's — and already paid, ol is a dependency today |
-| **Text editor weight** | Monaco ≈ 3.6 MB even trimmed to JSON-only — **an order of magnitude larger than the map** | **Ours** (report §3.1) |
-| **Layer teardown per keystroke** | Full `VectorSource`/`VectorLayer`/`Style` rebuild on every value change | **Ours** (report §3.9) |
-| **Large-geometry serialization** | A thousand-vertex polygon re-serialized on every map gesture | **Ours** (report §3.4) |
+| Cost centre                      | Magnitude                                                                                 | Whose choice                                                      |
+| -------------------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| **Geocoding round-trip**         | Network-bound, ~100–400 ms for every option                                               | Nobody's — identical across providers                             |
+| **Raster vs vector tiles**       | Raster is heavier at high zoom and cannot restyle at runtime                              | Provider's, but immaterial for a small fixed-style form-field map |
+| **Map library weight**           | ol ≈ 330 kB raw / 96 kB gzip                                                              | Provider's — and already paid, ol is a dependency today           |
+| **Text editor weight**           | Monaco ≈ 3.6 MB even trimmed to JSON-only — **an order of magnitude larger than the map** | **Ours** (report §3.1)                                            |
+| **Layer teardown per keystroke** | Full `VectorSource`/`VectorLayer`/`Style` rebuild on every value change                   | **Ours** (report §3.9)                                            |
+| **Large-geometry serialization** | A thousand-vertex polygon re-serialized on every map gesture                              | **Ours** (report §3.4)                                            |
 
 **The conclusion is that performance is not a reason to change provider.** The two largest
 costs in the current field are the editor bundle and our own update model; the third is the
@@ -203,15 +203,15 @@ tables above. Replacing OpenLayers would not move any of them.
 The last of the brief's recommendation criteria, and the one that most favours keeping the
 current stack.
 
-| Existing constraint | Effect on the recommendation |
-|---|---|
-| **`ol` is already a dependency**, used by exactly one component | Keeping it costs nothing new. It also means a renderer swap would touch only that component — real, but it buys nothing (§5) |
-| **Cesium/resium are present but unrelated** — they serve `Asset/Viewers/*` | Not reusable here: 3D globe, different interaction model. There is no "consolidate on one map library" win available |
+| Existing constraint                                                         | Effect on the recommendation                                                                                                            |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **`ol` is already a dependency**, used by exactly one component             | Keeping it costs nothing new. It also means a renderer swap would touch only that component — real, but it buys nothing (§5)            |
+| **Cesium/resium are present but unrelated** — they serve `Asset/Viewers/*`  | Not reusable here: 3D globe, different interaction model. There is no "consolidate on one map library" win available                    |
 | **The field is an antd `Form.Item` child** with `value`/`onChange` injected | The PoC's store must sit *behind* that contract, not replace it. Commit-on-blur/Enter has to reconcile with how antd tracks dirty state |
-| **Validation lifts into the form layer** and rejects submission | Already the right shape; the PoC's status-bar model should feed it rather than duplicate it |
-| **Search is already wired** to a geocoder | Adding the `GeocodeProvider` abstraction is a refactor of existing code, not a greenfield integration |
-| **i18n runs through `useT`** | Provider attribution and error states are translatable strings, not literals — a licence obligation with an i18n cost |
-| **The stored value shape is backend-owned and under redefinition** | Keep conversion in one adapter at the store boundary (report §3.8). This is the only part of the design that should be expected to move |
+| **Validation lifts into the form layer** and rejects submission             | Already the right shape; the PoC's status-bar model should feed it rather than duplicate it                                             |
+| **Search is already wired** to a geocoder                                   | Adding the `GeocodeProvider` abstraction is a refactor of existing code, not a greenfield integration                                   |
+| **i18n runs through `useT`**                                                | Provider attribution and error states are translatable strings, not literals — a licence obligation with an i18n cost                   |
+| **The stored value shape is backend-owned and under redefinition**          | Keep conversion in one adapter at the store boundary (report §3.8). This is the only part of the design that should be expected to move |
 
 Nothing in the current architecture resists the unified editor. The one genuine friction
 point is the form contract: the PoC commits eagerly to a module-level store, and the host
